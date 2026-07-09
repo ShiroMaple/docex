@@ -1,0 +1,29 @@
+{
+  "name": "docex",
+  "version": "1.0.0",
+  "description": "Document Extractor for Safety Reports",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "keywords": [
+    "extractor",
+    "pdf",
+    "docx",
+    "llm",
+    "structured-output",
+    "zod"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google/genai": "^2.10.0",
+    "axios": "^1.18.1",
+    "dotenv": "^17.4.2",
+    "mammoth": "^1.12.0",
+    "openai": "^6.45.0",
+    "pdf-parse": "^2.4.5",
+    "zod": "^4.4.3"
+  }
+}
