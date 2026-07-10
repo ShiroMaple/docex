@@ -36,27 +36,34 @@ async function main() {
       console.log(`--------------------------------------------------`);
       console.log(`📄 正在处理文件: ${fileName}`);
 
-      let extractedText = '';
+      let multimodalData = null;
 
       // 2. 根据文件后缀分发给对应的提取器
       try {
         if (ext === '.pdf') {
-          console.log(`⏳ [1/4] 正在提取 PDF 文字...`);
-          extractedText = await extractPdfText(filePath);
+          console.log(`⏳ [1/4] 正在解析 PDF 双路数据（无损文本与高精截图）...`);
+          multimodalData = await extractPdfText(filePath);
+          if (!multimodalData || (!multimodalData.text && (!multimodalData.images || multimodalData.images.length === 0))) {
+            console.warn(`⚠️ PDF 文件 ${fileName} 中未提取到任何有效参考文本或页面图片，跳过处理。`);
+            continue;
+          }
+          const textLen = multimodalData.text ? multimodalData.text.length : 0;
+          const imageCount = multimodalData.images ? multimodalData.images.length : 0;
+          console.log(`✅ [1/4] PDF 解析完成：文字参考层共 ${textLen} 字符，页面截图共 ${imageCount} 页。`);
         } else if (ext === '.docx') {
-          console.log(`⏳ [1/4] 正在提取 DOCX 文字...`);
-          extractedText = await extractDocxText(filePath);
+          console.log(`⏳ [1/4] 正在解析 DOCX 并生成多模态图文流...`);
+          multimodalData = await extractDocxText(filePath);
+          if (!multimodalData || multimodalData.length === 0) {
+            console.warn(`⚠️ DOCX 文件 ${fileName} 中未提取到任何有效图文，跳过处理。`);
+            continue;
+          }
+          const textCount = multimodalData.filter(p => p.type === 'text').length;
+          const imageCount = multimodalData.filter(p => p.type === 'image').length;
+          console.log(`✅ [1/4] DOCX 解析完成，共提取 ${textCount} 个文本/表格段落，${imageCount} 张现场图片。`);
         } else {
           console.warn(`⚠️ 忽略不支持的文件格式: ${fileName}`);
           continue;
         }
-
-        if (!extractedText || extractedText.trim().length === 0) {
-          console.warn(`⚠️ 文件 ${fileName} 中未提取到任何有效文本，跳过处理。`);
-          continue;
-        }
-
-        console.log(`✅ [1/4] 文本提取完成，共计 ${extractedText.length} 字符。`);
       } catch (err) {
         console.error(`❌ 文件提取失败，跳过该文件。原因:`, err.message);
         continue;
@@ -64,10 +71,16 @@ async function main() {
 
       // 3. 提交给 LLM 获取结构化输出
       let safetyReport;
+      let tokenUsage = null;
       try {
-        console.log(`⏳ [2/4] 正在调用大模型进行安全隐患提取 (Structured Output)...`);
-        safetyReport = await extractSafetyIssues(extractedText);
+        console.log(`⏳ [2/4] 正在调用多模态大模型进行安全隐患提取 (Structured Output)...`);
+        const result = await extractSafetyIssues(multimodalData);
+        safetyReport = result.data;
+        tokenUsage = result.usage;
         console.log(`✅ [2/4] 大模型识别完成！共提取出 ${safetyReport.issues.length} 条隐患。`);
+        if (tokenUsage) {
+          console.log(`📊 Token 消耗: 输入 ${tokenUsage.promptTokens} | 输出 ${tokenUsage.completionTokens} | 总计 ${tokenUsage.totalTokens}`);
+        }
       } catch (err) {
         console.error(`❌ 调用大模型提取失败，跳过该文件。原因:`, err.message);
         continue;
@@ -81,7 +94,12 @@ async function main() {
         
         await fs.writeFile(
           outputPath, 
-          JSON.stringify({ fileName, processedAt: new Date().toISOString(), ...safetyReport }, null, 2),
+          JSON.stringify({ 
+            fileName, 
+            processedAt: new Date().toISOString(), 
+            tokenUsage,
+            issues: safetyReport.issues 
+          }, null, 2),
           'utf-8'
         );
         console.log(`✅ [3/4] 备份完成: ${outputFileName}`);

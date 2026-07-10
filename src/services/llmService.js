@@ -1,6 +1,5 @@
 import OpenAI from 'openai';
 import { zodResponseFormat } from 'openai/helpers/zod';
-import { GoogleGenAI, setDefaultBaseUrls } from '@google/genai';
 import { config } from '../config.js';
 import { SafetyReportSchema } from '../schema.js';
 
@@ -13,130 +12,164 @@ if (config.openai.apiKey) {
   });
 }
 
-// 初始化 Gemini (Google Gen AI) 客户端
-let geminiClient = null;
-if (config.gemini.apiKey) {
-  if (config.gemini.baseUrl) {
-    setDefaultBaseUrls({ geminiUrl: config.gemini.baseUrl });
-  }
-  geminiClient = new GoogleGenAI({
-    apiKey: config.gemini.apiKey,
-  });
-}
-
 /**
- * 将提取出来的文本文档发送给大模型进行结构化数据解析
- * @param {string} text - 报告的纯文本内容
+ * 将提取出来的多模态数据发送给大模型进行结构化数据解析
+ * @param {object} multimodalData - 包含文字参考层及图片数组的多模态对象
  * @returns {Promise<object>} 解析后的安全隐患结构化数据 (符合 SafetyReportSchema)
  */
-export async function extractSafetyIssues(text) {
-  const provider = config.llmProvider.toLowerCase();
-  
+export async function extractSafetyIssues(multimodalData) {
   const systemPrompt = `你是一个专业的安全检查报告解析专家。
-任务：从提供的安全检查报告文本中，提取出所有的安全隐患（问题）。
+你的任务是：根据输入的报告文档内容（包含文字参考层、表格结构以及视觉截图），提取出所有的安全隐患（问题）。
 请严格按照提供的 JSON Schema 结构进行输出。每个文件可能包含 1 个或多个安全隐患，请将它们完整地提取到 issues 数组中。
-提取规范：
-1. 仔细阅读全文，找到所有提到安全隐患、缺陷、整改项的内容。
+
+【关键提取规范】：
+1. 仔细结合文字参考层和提供的现场图片/页面截图。安全报告中常常是“一段问题文字描述，紧跟一张现场照片，或照片上有红框圈出具体问题”。请利用图片中的视觉特征辅助理解问题边界和现状描述。
 2. 确保提取出每个隐患的项目名称、隐患类型、检查区域、问题描述、整改要求、检查人员和检查日期。
-3. 如果某些字段在文中未提及，请设为空字符串 ""，不要编造数据。
-4. 检查日期尽量转化为 YYYY-MM-DD 格式，如无法转化则保持原文。`;
+3. 表格和图片中的信息同样重要，必须提取出来。若某些字段在文中未提及，请设为空字符串 ""，绝对不能编造数据。
+4. 检查日期尽量转化为 YYYY-MM-DD 格式，如无法转化则保持原文。
+5. 必须区分不同的隐患间隔，确保 issues 数组中的每一项都代表一个独立的安全问题。`;
 
-  const userPrompt = `请解析以下安全检查报告内容，并以结构化 JSON 格式返回：\n\n${text}`;
+  const userPrompt = `请解析以下安全检查报告内容，结合文字和页面截图，以结构化 JSON 格式返回提取的安全隐患列表：`;
 
-  if (provider === 'openai') {
-    return await callOpenAI(systemPrompt, userPrompt);
-  } else if (provider === 'google') {
-    return await callGemini(systemPrompt, userPrompt);
-  } else {
-    throw new Error(`未知的 LLM_PROVIDER: ${config.llmProvider}，目前仅支持 google 或 openai`);
-  }
+  return await callOpenAI(systemPrompt, userPrompt, multimodalData);
 }
 
 /**
- * 调用 OpenAI 结构化输出
+ * 调用 OpenAI 结构化输出（带自动降级 JSON Mode 与本地 Zod 校验）
  */
-async function callOpenAI(systemPrompt, userPrompt) {
+async function callOpenAI(systemPrompt, userPrompt, multimodalData) {
   if (!openaiClient) {
-    throw new Error('未配置 OpenAI API Key 却尝试调用 OpenAI 服务');
+    throw new Error('未配置 OpenAI API Key，无法调用大模型服务');
   }
 
   try {
-    const response = await openaiClient.beta.chat.completions.parse({
-      model: config.openai.model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      response_format: zodResponseFormat(SafetyReportSchema, 'safety_report'),
-    });
+    const contentArray = [];
+    contentArray.push({ type: 'text', text: userPrompt });
 
-    const parsedData = response.choices[0].message.parsed;
-    if (!parsedData) {
-      throw new Error('OpenAI 未能返回符合 Schema 的数据');
-    }
-    return parsedData;
-  } catch (error) {
-    console.error('❌ 调用 OpenAI 提取安全隐患失败:', error);
-    throw error;
-  }
-}
+    // 判断是 PDF（结构为 { text, images }）还是 DOCX（结构为交织数组）
+    const isPdf = multimodalData && !Array.isArray(multimodalData) && ('text' in multimodalData || 'images' in multimodalData);
 
-/**
- * 调用 Gemini (Google Gen AI SDK) 结构化输出
- */
-async function callGemini(systemPrompt, userPrompt) {
-  if (!geminiClient) {
-    throw new Error('未配置 Gemini API Key 却尝试调用 Gemini 服务');
-  }
-
-  try {
-    // 构造符合 Gemini 要求的 responseSchema (OpenAPI 3.0 规范)
-    const geminiSchema = {
-      type: 'OBJECT',
-      properties: {
-        issues: {
-          type: 'ARRAY',
-          description: '从文档中提取出的安全隐患列表，若无隐患则返回空数组',
-          items: {
-            type: 'OBJECT',
-            properties: {
-              projectName: { type: 'STRING', description: '隐患对应的项目名称。若未提及，留空 ""' },
-              issueType: { type: 'STRING', description: '隐患的分类或类型，例如：高处作业、临时用电、消防安全、临边防护等' },
-              inspectionArea: { type: 'STRING', description: '隐患具体的检查区域、点位或楼层' },
-              description: { type: 'STRING', description: '安全隐患的具体问题描述' },
-              rectificationRequirement: { type: 'STRING', description: '针对该隐患提出的整改要求或限期整改措施' },
-              inspector: { type: 'STRING', description: '负责进行本次检查的人员姓名' },
-              inspectionDate: { type: 'STRING', description: '发现隐患的检查日期，格式为 YYYY-MM-DD' }
-            },
-            required: ['projectName', 'issueType', 'inspectionArea', 'description', 'rectificationRequirement', 'inspector', 'inspectionDate']
-          }
-        }
-      },
-      required: ['issues']
-    };
-
-    const response = await geminiClient.models.generateContent({
-      model: config.gemini.model,
-      contents: `${systemPrompt}\n\n${userPrompt}`,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: geminiSchema,
-        temperature: 0.1 // 降低温度以提高提取的准确性
+    if (isPdf) {
+      // 1. 拼装 PDF 提取的辅助文本通道
+      if (multimodalData.text && multimodalData.text.trim().length > 0) {
+        contentArray.push({
+          type: 'text',
+          text: `【PDF 原始文档的文字参考层】:\n\`\`\`\n${multimodalData.text}\n\`\`\``
+        });
+      } else {
+        contentArray.push({
+          type: 'text',
+          text: `【PDF 原始文档的文字参考层】: (未提取到电子文本，请完全依据视觉截图进行 OCR 理解)`
+        });
       }
-    });
 
-    const responseText = response.text;
-    if (!responseText) {
-      throw new Error('Gemini 未能返回任何内容');
+      // 2. 拼装 PDF 提取的页面图片通道（视觉主通道）
+      if (multimodalData.images && multimodalData.images.length > 0) {
+        contentArray.push({
+          type: 'text',
+          text: `【PDF 报告的逐页视觉截图】:`
+        });
+        for (const img of multimodalData.images) {
+          contentArray.push({
+            type: 'image_url',
+            image_url: {
+              url: `data:${img.mimeType};base64,${img.data}`
+            }
+          });
+        }
+      }
+    } else {
+      // 3. 拼装 DOCX 图文交织流
+      for (const part of multimodalData) {
+        if (part.type === 'text') {
+          contentArray.push({
+            type: 'text',
+            text: part.text
+          });
+        } else if (part.type === 'image') {
+          contentArray.push({
+            type: 'image_url',
+            image_url: {
+              url: `data:${part.mimeType};base64,${part.data}`
+            }
+          });
+        }
+      }
     }
 
-    // 解析并校验返回的 JSON
-    const parsedData = JSON.parse(responseText);
-    
-    // 使用 zod Schema 进行运行时安全校验
-    return SafetyReportSchema.parse(parsedData);
+    // 优先使用标准 chat.completions.parse API
+    try {
+      console.log('⏳ 正在尝试使用 json_schema 结构化输出模式...');
+      const response = await openaiClient.chat.completions.parse({
+        model: config.openai.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: contentArray }
+        ],
+        response_format: zodResponseFormat(SafetyReportSchema, 'safety_report'),
+      });
+
+      const parsedData = response.choices[0].message.parsed;
+      if (!parsedData) {
+        throw new Error('解析失败: 模型未返回结构化数据');
+      }
+      return {
+        data: parsedData,
+        usage: response.usage ? {
+          promptTokens: response.usage.prompt_tokens,
+          completionTokens: response.usage.completion_tokens,
+          totalTokens: response.usage.total_tokens
+        } : null
+      };
+    } catch (parseError) {
+      console.warn('⚠️ 您的大模型服务商不支持 completions.parse (json_schema)，正在自动降级为标准 JSON Mode 进行兼容提取...');
+      
+      // 构造降级提示词，明确指示输出符合 Zod Schema
+      const fallbackSystemPrompt = `${systemPrompt}\n\n【关键约束】：你必须且只能返回一个合法的 JSON 对象，不要包含 markdown 格式标记，不要包含 json 代码块包裹，直接输出 JSON 文本。其顶级键名必须为 "issues"，值是一个数组。每个隐患对象包含以下字段：
+- projectName: 项目名称（若未提及，设为 ""）
+- issueType: 安全隐患类型（如临时用电、高处作业、临边防护、机械安全等）
+- inspectionArea: 发现的检查区域
+- description: 安全隐患描述，结合文字和截图红框中的状况
+- rectificationRequirement: 整改要求（若未提及，设为 ""）
+- inspector: 检查人员（若未提及，设为 ""）
+- inspectionDate: 发现日期 (格式为 YYYY-MM-DD)`;
+
+      const fallbackResponse = await openaiClient.chat.completions.create({
+        model: config.openai.model,
+        messages: [
+          { role: 'system', content: fallbackSystemPrompt },
+          { role: 'user', content: contentArray }
+        ],
+        response_format: { type: 'json_object' }
+      });
+
+      let rawContent = fallbackResponse.choices[0].message.content;
+      if (!rawContent) {
+        throw new Error('降级 JSON Mode 调用未返回任何内容');
+      }
+
+      rawContent = rawContent.trim();
+      // 过滤大模型可能擅自添加的 ```json ... ``` 标记
+      if (rawContent.startsWith('```')) {
+        rawContent = rawContent.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
+      }
+
+      const parsedData = JSON.parse(rawContent);
+      
+      // 本地使用 Zod Schema 运行时强制校对
+      const validatedData = SafetyReportSchema.parse(parsedData);
+
+      return {
+        data: validatedData,
+        usage: fallbackResponse.usage ? {
+          promptTokens: fallbackResponse.usage.prompt_tokens,
+          completionTokens: fallbackResponse.usage.completion_tokens,
+          totalTokens: fallbackResponse.usage.total_tokens
+        } : null
+      };
+    }
   } catch (error) {
-    console.error('❌ 调用 Gemini 提取安全隐患失败:', error);
+    console.error('❌ 多模态安全隐患数据提取失败:', error);
     throw error;
   }
 }

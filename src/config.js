@@ -9,18 +9,12 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 export const config = {
-  llmProvider: process.env.LLM_PROVIDER || 'google',
+  llmProvider: process.env.LLM_PROVIDER || 'openai',
 
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
     baseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
     model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-  },
-
-  gemini: {
-    apiKey: process.env.GEMINI_API_KEY,
-    model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
-    baseUrl: process.env.GEMINI_BASE_URL,
   },
 
   lark: {
@@ -37,8 +31,6 @@ export const config = {
 };
 
 // 基础校验
-if (config.llmProvider === 'google' && !config.gemini.apiKey) {
-  console.warn('⚠️ 警告: 未检测到 GEMINI_API_KEY 环境变量');
-} else if (config.llmProvider === 'openai' && !config.openai.apiKey) {
-  console.warn('⚠️ 警告: 未检测到 OPENAI_API_KEY 环境变量');
+if (!config.openai.apiKey) {
+  console.warn('⚠️ 警告: 未检测到 OPENAI_API_KEY 环境变量，程序调用可能会失败');
 }
