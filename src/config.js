@@ -24,6 +24,12 @@ export const config = {
     tableId: process.env.LARK_TABLE_ID,
   },
 
+  wps: {
+    appId: process.env.WPS_APP_ID,
+    appSecret: process.env.WPS_APP_SECRET,
+    baseId: process.env.WPS_BASE_ID,
+  },
+
   paths: {
     inputDir: path.resolve(__dirname, '../data/input'),
     outputDir: path.resolve(__dirname, '../data/output'),
