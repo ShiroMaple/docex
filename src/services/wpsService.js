@@ -73,8 +73,12 @@ class WpsService {
   /**
    * 获取多维表格 Schema（带 30 秒缓存）
    */
-  async getSchema(sheetName = null) {
+  async getSchema(sheetName = null, forceRefresh = false) {
     const now = Date.now();
+    if (forceRefresh) {
+      this._schemaCache = null;
+      this._schemaCacheTime = 0;
+    }
     if (this._schemaCache && (now - this._schemaCacheTime < 30000)) {
       return this._schemaCache;
     }

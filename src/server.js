@@ -7,6 +7,7 @@ import { extractPdfText } from './extractors/pdfExtractor.js';
 import { extractDocxText } from './extractors/docxExtractor.js';
 import { extractSafetyIssues } from './services/llmService.js';
 import wpsService from './services/wpsService.js';
+import { getFeishuSchema, appendToFeishu } from './services/feishuService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -44,13 +45,20 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: '未收到文件' });
     }
 
+    const provider = req.body.provider || 'wps';
     const fileId = req.body.fileId?.trim();
-    if (!fileId) {
+    const appToken = req.body.appToken?.trim();
+    const tableId = req.body.tableId?.trim();
+
+    if (provider === 'wps' && !fileId) {
       return res.status(400).json({ error: '未提供 WPS fileId' });
+    }
+    if (provider === 'feishu' && (!appToken || !tableId)) {
+      return res.status(400).json({ error: '未提供飞书 appToken 或 tableId' });
     }
 
     const ext = path.extname(req.file.originalname).toLowerCase();
-    console.log(`📄 收到文件: ${req.file.originalname} (${ext}), fileId: ${fileId}`);
+    console.log(`📄 收到文件: ${req.file.originalname} (${ext}), provider: ${provider}`);
 
     // 1. 提取多模态数据
     let multimodalData;
@@ -67,14 +75,24 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     const { data: safetyReport, usage } = await extractSafetyIssues(multimodalData);
     console.log(`✅ LLM 返回 ${safetyReport.issues.length} 条隐患`);
 
-    // 3. 获取 WPS Schema（并行）
+    // 3. 获取 Schema
     let schemaFields = [];
     try {
-      wpsService.setFileId(fileId);
-      const sheet = await wpsService.getSchema();
-      schemaFields = sheet.fields.map(f => ({ id: f.id, name: f.name, type: f.type }));
+      if (provider === 'wps') {
+        wpsService.setFileId(fileId);
+        const sheet = await wpsService.getSchema();
+        schemaFields = sheet.fields.map(f => ({
+          id: f.id,
+          name: f.name,
+          type: f.type,
+          isReadOnly: ['CreatedTime', 'CreatedBy', 'Creator', 'LastModifiedTime', 'LastModifiedBy', 'Modifier'].includes(f.type)
+        }));
+      } else if (provider === 'feishu') {
+        const sheet = await getFeishuSchema(appToken, tableId);
+        schemaFields = sheet.fields;
+      }
     } catch (e) {
-      console.warn('⚠️ 获取 WPS Schema 失败:', e.message);
+      console.warn(`⚠️ 获取 ${provider} Schema 失败:`, e.message);
     }
 
     return res.json({
@@ -96,42 +114,71 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 });
 
 /**
- * GET /api/schema?fileId=xxx
- * 获取 WPS 目标表字段列表
+ * GET /api/schema
+ * 获取 WPS 或 飞书目标表字段列表
+ * Query: provider, fileId (WPS), appToken (飞书), tableId (飞书), force (是否强制清除缓存)
  */
 app.get('/api/schema', async (req, res) => {
-  const fileId = req.query.fileId?.trim();
-  if (!fileId) return res.status(400).json({ error: '缺少 fileId 参数' });
+  const provider = req.query.provider?.trim() || 'wps';
+  const force = req.query.force === 'true';
 
   try {
-    wpsService.setFileId(fileId);
-    const sheet = await wpsService.getSchema();
-    const fields = sheet.fields.map(f => ({ id: f.id, name: f.name, type: f.type }));
-    res.json({ sheetName: sheet.name, fields });
+    if (provider === 'wps') {
+      const fileId = req.query.fileId?.trim();
+      if (!fileId) return res.status(400).json({ error: '缺少 fileId 参数' });
+      wpsService.setFileId(fileId);
+      const sheet = await wpsService.getSchema(null, force);
+      const fields = sheet.fields.map(f => ({
+        id: f.id,
+        name: f.name,
+        type: f.type,
+        isReadOnly: ['CreatedTime', 'CreatedBy', 'Creator', 'LastModifiedTime', 'LastModifiedBy', 'Modifier'].includes(f.type)
+      }));
+      res.json({ sheetName: sheet.name, fields });
+    } else if (provider === 'feishu') {
+      const appToken = req.query.appToken?.trim();
+      const tableId = req.query.tableId?.trim();
+      if (!appToken || !tableId) return res.status(400).json({ error: '缺少 appToken 或 tableId 参数' });
+      const sheet = await getFeishuSchema(appToken, tableId);
+      res.json({ sheetName: sheet.name, fields: sheet.fields });
+    } else {
+      res.status(400).json({ error: '不支持的 provider' });
+    }
   } catch (err) {
+    console.error('获取 Schema 失败:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
 /**
  * POST /api/push
- * 将确认后的隐患列表写入 WPS 多维表格
- * Body: { fileId, issues, fieldMapping }
- *   fieldMapping: { "项目名称": "projectName", ... } or null (自动匹配)
+ * 将确认后的隐患列表写入 WPS 或 飞书多维表格
+ * Body: { provider, fileId, appToken, tableId, issues, fieldMapping }
  */
 app.post('/api/push', async (req, res) => {
-  const { fileId, issues, fieldMapping } = req.body;
+  const { provider, fileId, appToken, tableId, issues, fieldMapping } = req.body;
 
-  if (!fileId) return res.status(400).json({ error: '缺少 fileId' });
   if (!issues || issues.length === 0) return res.status(400).json({ error: '没有要推送的数据' });
 
+  const targetProvider = provider || 'wps';
+
   try {
-    wpsService.setFileId(fileId);
-    const result = await wpsService.appendRecords(issues, null, fieldMapping);
-    res.json({ success: true, insertedCount: issues.length, result });
+    if (targetProvider === 'wps') {
+      if (!fileId) return res.status(400).json({ error: '缺少 fileId' });
+      wpsService.setFileId(fileId);
+      const result = await wpsService.appendRecords(issues, null, fieldMapping);
+      res.json({ success: true, insertedCount: issues.length, result });
+    } else if (targetProvider === 'feishu') {
+      if (!appToken || !tableId) return res.status(400).json({ error: '缺少 appToken 或 tableId' });
+      const result = await appendToFeishu(issues, appToken, tableId, fieldMapping);
+      res.json({ success: true, insertedCount: issues.length, result });
+    } else {
+      res.status(400).json({ error: '不支持的 provider' });
+    }
   } catch (err) {
     console.error('❌ 推送失败:', err.response?.data || err.message);
-    res.status(500).json({ error: err.response?.data?.msg || err.message });
+    const detailMsg = err.response?.data?.msg || err.response?.data?.message || err.message;
+    res.status(500).json({ error: detailMsg });
   }
 });
 

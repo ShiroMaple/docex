@@ -4,7 +4,7 @@ import { config } from './config.js';
 import { extractPdfText } from './extractors/pdfExtractor.js';
 import { extractDocxText } from './extractors/docxExtractor.js';
 import { extractSafetyIssues } from './services/llmService.js';
-import { appendToTable } from './services/tableService.js';
+import { appendToTable } from './services/feishuService.js';
 
 /**
  * 主控制流：扫描并处理输入目录中的所有文档
