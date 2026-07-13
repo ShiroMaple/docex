@@ -177,6 +177,64 @@ class WpsService {
     console.log(`✨ 成功写入 ${issues.length} 条记录到 WPS 多维表格（表：${sheet.name}）`);
     return response.data;
   }
+
+  /**
+   * 在 WPS 多维表格中新增一列（文本类型）
+   */
+  async createField(fileId, fieldName) {
+    const token = await this.getAccessToken();
+    const sheet = await this.getSchema();
+    const url = `https://openapi.wps.cn/v7/coop/dbsheet/${fileId}/sheets/${sheet.id}/fields/create`;
+
+    const response = await axios.post(url, {
+      name: fieldName,
+      type: 'Text'
+    }, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    // 强行清理缓存，使下一次读取能同步到新字段
+    this._schemaCache = null;
+    this._schemaCacheTime = 0;
+
+    return response.data;
+  }
+
+  /**
+   * 获取 WPS 表格最后一行的序号最大值
+   */
+  async getWpsLastSerialNumber(fileId, serialFieldName) {
+    const token = await this.getAccessToken();
+    const sheet = await this.getSchema();
+    const url = `https://openapi.wps.cn/v7/coop/dbsheet/${fileId}/sheets/${sheet.id}/records`;
+    
+    try {
+      const response = await axios.get(url, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { limit: 100 }
+      });
+      const records = response.data?.data?.records || [];
+      if (records.length === 0) return 0;
+      
+      let maxVal = 0;
+      for (const r of records) {
+        try {
+          const fields = JSON.parse(r.fields_value);
+          const val = parseInt(fields[serialFieldName]);
+          if (!isNaN(val) && val > maxVal) {
+            maxVal = val;
+          }
+        } catch {}
+      }
+      return maxVal;
+    } catch (e) {
+      console.warn('WPS 获取最后一行序号失败，默认从 0 开始:', e.message);
+      return 0;
+    }
+  }
 }
 
 export const wpsService = new WpsService();

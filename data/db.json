@@ -1,0 +1,43 @@
+{
+  "files": [
+    {
+      "md5": "ff3e3d8e81453144312017878cb75a78",
+      "fileName": "测试文件.pdf",
+      "uploadTime": "2026-07-13T05:22:02.276Z",
+      "status": "done",
+      "progress": 100,
+      "originalPath": "C:\\Users\\gaoft\\Documents\\CodeSpace\\docex\\data\\uploads\\ff3e3d8e81453144312017878cb75a78.pdf",
+      "error": null,
+      "textPath": "data/preprocessed/ff3e3d8e81453144312017878cb75a78/text.txt",
+      "images": [
+        {
+          "path": "data/preprocessed/ff3e3d8e81453144312017878cb75a78/page-1.png",
+          "mimeType": "image/png"
+        },
+        {
+          "path": "data/preprocessed/ff3e3d8e81453144312017878cb75a78/page-2.png",
+          "mimeType": "image/png"
+        },
+        {
+          "path": "data/preprocessed/ff3e3d8e81453144312017878cb75a78/page-3.png",
+          "mimeType": "image/png"
+        },
+        {
+          "path": "data/preprocessed/ff3e3d8e81453144312017878cb75a78/page-4.png",
+          "mimeType": "image/png"
+        }
+      ]
+    },
+    {
+      "md5": "8040998ee4ad8c0d90e1edf8f7c75cb1",
+      "fileName": "2026-06-22检查问题1.docx",
+      "uploadTime": "2026-07-13T06:56:04.233Z",
+      "status": "done",
+      "progress": 100,
+      "originalPath": "C:\\Users\\gaoft\\Documents\\CodeSpace\\docex\\data\\uploads\\8040998ee4ad8c0d90e1edf8f7c75cb1.docx",
+      "error": null,
+      "textPath": "data/preprocessed/8040998ee4ad8c0d90e1edf8f7c75cb1/text.txt",
+      "structurePath": "data/preprocessed/8040998ee4ad8c0d90e1edf8f7c75cb1/structure.json"
+    }
+  ]
+}

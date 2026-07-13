@@ -178,3 +178,54 @@ export async function appendToTable(issues) {
 
   return appendToFeishu(issues, appToken, tableId, null);
 }
+
+/**
+ * 在飞书多维表格中新增一列（文本类型）
+ */
+export async function createFeishuField(appToken, tableId, fieldName) {
+  const token = await getLarkTenantToken();
+  const url = `https://open.feishu.cn/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/fields`;
+  const response = await axios.post(url, {
+    field_name: fieldName,
+    type: 1 // 1 = 文本
+  }, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json; charset=utf-8'
+    }
+  });
+
+  if (response.data.code !== 0) {
+    throw new Error(`创建飞书列失败: ${response.data.msg}`);
+  }
+  return response.data;
+}
+
+/**
+ * 获取飞书表格最后一行的序号最大值
+ */
+export async function getFeishuLastSerialNumber(appToken, tableId, serialFieldName) {
+  const token = await getLarkTenantToken();
+  const url = `https://open.feishu.cn/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/records`;
+  
+  try {
+    const response = await axios.get(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      params: { page_size: 100 }
+    });
+    const items = response.data?.data?.items || [];
+    if (items.length === 0) return 0;
+    
+    let maxVal = 0;
+    for (const item of items) {
+      const val = parseInt(item.fields[serialFieldName]);
+      if (!isNaN(val) && val > maxVal) {
+        maxVal = val;
+      }
+    }
+    return maxVal;
+  } catch (e) {
+    console.warn('飞书获取最后一行序号失败，默认从 0 开始:', e.message);
+    return 0;
+  }
+}
