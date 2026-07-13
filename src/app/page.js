@@ -103,6 +103,8 @@ export default function DocumentExtractor() {
 
   // ── Step 3: Extraction & Pushing ──
   const [isExtracting, setIsExtracting] = useState(false);
+  const [extractingProgress, setExtractingProgress] = useState(null); // { percent, currentFile, currentIndex, totalFiles }
+  const [fileStatusMap, setFileStatusMap] = useState({}); // { [md5]: 'pending' | 'processing' | 'success' | 'error' }
   const [extractionError, setExtractionError] = useState('');
   const [extractedIssues, setExtractedIssues] = useState([]);
   const [tokenUsage, setTokenUsage] = useState(null);
@@ -630,12 +632,14 @@ export default function DocumentExtractor() {
 
     setExtractionError('');
     setExtractedIssues([]);
-    setTokenUsage(null);
+    setTokenUsage({ promptTokens: 0, completionTokens: 0, totalTokens: 0 });
     setPushResult(null);
+    setRawLlmResponse('');
 
     // Prompt Security Shield Local Check
     if (checkPromptSecurityLocal(customPrompt)) {
       setExtractionError('⚠️ 安全拦截：检测到潜在的提示词注入攻击或敏感配置泄露风险（禁止索要环境变量、系统文件或执行越狱指令）。');
+      setActiveStep(3);
       return;
     }
 
@@ -643,10 +647,26 @@ export default function DocumentExtractor() {
     const fieldLeak = fields.some(f => checkPromptSecurityLocal(f.label) || checkPromptSecurityLocal(f.desc) || checkPromptSecurityLocal(f.example));
     if (fieldLeak) {
       setExtractionError('⚠️ 安全拦截：检测到提取字段属性描述中含有潜在的越狱或隐私嗅探词汇。');
+      setActiveStep(3);
       return;
     }
 
+    // Initialize files status map
+    const initialStatus = {};
+    readyFiles.forEach(f => {
+      initialStatus[f.md5] = 'pending';
+    });
+    setFileStatusMap(initialStatus);
+
+    // Immediate page transition
+    setActiveStep(3);
     setIsExtracting(true);
+    setExtractingProgress({
+      percent: 0,
+      currentFile: readyFiles[0].fileName,
+      currentIndex: 1,
+      totalFiles: readyFiles.length
+    });
 
     // Precompile keys dynamically if empty
     const processedFields = fields.map((f, idx) => ({
@@ -665,6 +685,14 @@ export default function DocumentExtractor() {
 
     for (let i = 0; i < readyFiles.length; i++) {
       const file = readyFiles[i];
+      setFileStatusMap(prev => ({ ...prev, [file.md5]: 'processing' }));
+      setExtractingProgress({
+        percent: Math.round((i / readyFiles.length) * 100),
+        currentFile: file.fileName,
+        currentIndex: i + 1,
+        totalFiles: readyFiles.length
+      });
+
       try {
         const res = await fetch('/api/extract', {
           method: 'POST',
@@ -679,14 +707,23 @@ export default function DocumentExtractor() {
         });
         const data = await res.json();
 
+        // Incrementally update token usage state
         if (data.tokenUsage) {
           totalPromptTokens += data.tokenUsage.promptTokens || 0;
           totalCompletionTokens += data.tokenUsage.completionTokens || 0;
           totalTotalTokens += data.tokenUsage.totalTokens || 0;
+
+          setTokenUsage({
+            promptTokens: totalPromptTokens,
+            completionTokens: totalCompletionTokens,
+            totalTokens: totalTotalTokens
+          });
         }
 
+        // Incrementally update raw text response
         if (data.raw) {
           combinedRawContent += `\n/* === 文件: ${file.fileName} (${file.md5}) === */\n${data.raw}\n`;
+          setRawLlmResponse(combinedRawContent.trim());
         }
 
         if (!res.ok) {
@@ -694,43 +731,38 @@ export default function DocumentExtractor() {
         }
 
         const rawItems = data.data || [];
-        // 过滤掉所有字段均为值为空的空对象，防御空记录写入
+        // Filter out empty items
         const filtered = rawItems.filter(item => {
           return Object.values(item).some(val => val && val.toString().trim() !== '');
         });
+
+        // Dynamic streaming append to table
+        setExtractedIssues(prev => [...prev, ...filtered]);
         allExtractedIssues = [...allExtractedIssues, ...filtered];
+        setFileStatusMap(prev => ({ ...prev, [file.md5]: 'success' }));
 
       } catch (err) {
         console.error(`解析文件 ${file.fileName} 失败:`, err);
         finalError = err.message;
+        setFileStatusMap(prev => ({ ...prev, [file.md5]: 'error' }));
         break;
       }
     }
 
-    setTokenUsage({
-      promptTokens: totalPromptTokens,
-      completionTokens: totalCompletionTokens,
-      totalTokens: totalTotalTokens
-    });
-    setRawLlmResponse(combinedRawContent.trim());
-
     setIsExtracting(false);
+    setExtractingProgress(null);
 
     if (finalError) {
       setExtractionError(finalError);
-      setActiveStep(3);
+      showToast(`⚠️ 解析中断：${finalError}`);
       return;
     }
 
-    setExtractedIssues(allExtractedIssues);
-
-    // 提取到有效非空隐患，才自动流转。若结果为空则保持在 Step 3 显示熔断红牌
     if (allExtractedIssues.length > 0) {
-      showToast('提取成功！已为您自动切换至核对页面。');
+      showToast('所有文档提取成功！');
     } else {
-      showToast('⚠️ 大模型解析结果为空，空推送已安全熔断！');
+      showToast('⚠️ 大模型解析结果为空，已安全熔断！');
     }
-    setActiveStep(3);
   };
 
   // ── Step 3: Result editing & Pushing ──
@@ -1531,6 +1563,66 @@ export default function DocumentExtractor() {
                   <h2 className="font-serif font-medium text-lg">步骤 3: 解析结果</h2>
                 </div>
 
+                {/* ⏳ Real-time Extraction Progress indicator */}
+                {isExtracting && extractingProgress && (
+                  <div className="border border-border-warm bg-warm-sand/10 rounded-xl p-5 mb-6 flex flex-col gap-4 shadow-sm">
+                    <div className="flex items-center justify-between text-xs text-olive-gray font-semibold">
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 text-terracotta animate-spin" />
+                        <span>正在进行 AI 解析提取：</span>
+                        <span className="text-near-black font-bold">
+                          第 {extractingProgress.currentIndex} / {extractingProgress.totalFiles} 个文档
+                        </span>
+                      </div>
+                      <span className="text-terracotta font-bold text-sm">
+                        {extractingProgress.percent}%
+                      </span>
+                    </div>
+
+                    {/* Progress Bar Container */}
+                    <div className="w-full bg-warm-sand/40 h-2 rounded-full overflow-hidden border border-border-warm/30">
+                      <div
+                        className="bg-terracotta h-full transition-all duration-500 ease-out"
+                        style={{ width: `${extractingProgress.percent}%` }}
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <span className="text-xs text-olive-gray flex items-center gap-1.5">
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-terracotta animate-ping" />
+                        当前文档: <strong className="text-near-black truncate max-w-md">{extractingProgress.currentFile}</strong>
+                      </span>
+
+                      {/* File Queue Mini Matrix Status */}
+                      <div className="flex items-center gap-2 flex-wrap mt-2">
+                        {filesQueue.filter(f => f.status === 'done').map((file, fIdx) => {
+                          const status = fileStatusMap[file.md5] || 'pending';
+                          let badgeBg = 'bg-stone-gray/10 text-stone-gray';
+                          let badgeLabel = '等待中';
+                          if (status === 'processing') {
+                            badgeBg = 'bg-terracotta/10 text-terracotta border border-terracotta/20 animate-pulse';
+                            badgeLabel = '解析中 ⏳';
+                          } else if (status === 'success') {
+                            badgeBg = 'bg-green-100 text-green-700';
+                            badgeLabel = '成功就绪 ';
+                          } else if (status === 'error') {
+                            badgeBg = 'bg-red-100 text-red-700';
+                            badgeLabel = '失败 ❌';
+                          }
+                          return (
+                            <div key={file.md5} className="flex items-center gap-1.5 bg-white border border-border-cream rounded px-2.5 py-1 text-[11px] font-semibold">
+                              <span className="text-near-black truncate max-w-[120px]">{file.fileName}</span>
+                              <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${badgeBg}`}>
+                                {badgeLabel}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Local validation warning / LLM error response */}
                 {extractionError && (
                   <div className="border border-red-200 bg-red-50/50 rounded-lg p-5 flex gap-3 text-xs text-error-crimson mb-6">
@@ -1569,7 +1661,7 @@ export default function DocumentExtractor() {
                   </div>
                 )}
 
-                {extractedIssues.length > 0 && (
+                {(extractedIssues.length > 0 || isExtracting) && (
                   <div className="flex flex-col gap-6">
 
                     {/* Clean Token stats */}
@@ -1595,14 +1687,19 @@ export default function DocumentExtractor() {
                     {/* Results grid */}
                     <div className="border border-border-cream rounded-lg bg-white overflow-hidden shadow-sm">
                       <div className="overflow-x-auto overflow-y-auto max-h-[380px] custom-scrollbar">
-                        <table className="w-full border-collapse text-left text-xs whitespace-nowrap">
+                        <table className="w-full border-collapse text-left text-xs table-fixed">
                           <thead className="sticky top-0 z-10 bg-parchment border-b border-border-cream shadow-[0_1px_0_0_#e8e6dc]">
                             <tr>
-                              <th className="p-3 font-bold text-near-black w-[40px] text-center">#</th>
-                              {fields.map((f, idx) => (
-                                <th key={idx} className="p-3 font-bold text-near-black">{f.label || `列_${idx + 1}`}</th>
-                              ))}
-                              <th className="p-3 font-bold text-near-black text-center w-[60px]">操作</th>
+                              <th className="p-3 font-bold text-near-black w-[4%] text-center whitespace-nowrap">#</th>
+                              {fields.map((f, idx) => {
+                                const dataColWidth = fields.length > 0 ? `${(90 / fields.length).toFixed(2)}%` : '90%';
+                                return (
+                                  <th key={idx} style={{ width: dataColWidth }} className="p-3 font-bold text-near-black truncate" title={f.label}>
+                                    {f.label || `列_${idx + 1}`}
+                                  </th>
+                                );
+                              })}
+                              <th className="p-3 font-bold text-near-black text-center w-[6%] whitespace-nowrap">操作</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border-cream">
@@ -1616,13 +1713,13 @@ export default function DocumentExtractor() {
                                   const isInvalid = !!validationErrors[errKey];
 
                                   return (
-                                    <td key={colIndex} className="p-2">
+                                    <td key={colIndex} className="p-2 align-top">
                                       <div className="relative">
                                         <div
                                           contentEditable="true"
                                           suppressContentEditableWarning={true}
                                           onBlur={(e) => updateIssueCell(rowIndex, key, e.target.innerText.trim())}
-                                          className={`border rounded px-2.5 py-1.5 text-xs outline-none focus:bg-ivory/50 focus:border-terracotta transition min-w-[140px] min-h-[28px] ${isInvalid ? 'border-red-400 bg-red-50/50' : 'border-transparent hover:border-border-warm hover:bg-parchment/20'
+                                          className={`border rounded px-2.5 py-1.5 text-xs outline-none focus:bg-ivory/50 focus:border-terracotta transition min-h-[28px] break-words whitespace-normal leading-relaxed ${isInvalid ? 'border-red-400 bg-red-50/50' : 'border-transparent hover:border-border-warm hover:bg-parchment/20'
                                             }`}
                                         >
                                           {issue[key] || ''}
@@ -1635,10 +1732,10 @@ export default function DocumentExtractor() {
                                   );
                                 })}
 
-                                <td className="p-2 text-center">
+                                <td className="p-2 text-center align-top">
                                   <button
                                     onClick={() => removeIssueRow(rowIndex)}
-                                    className="text-stone-gray hover:text-error-crimson p-1.5 rounded transition"
+                                    className="text-stone-gray hover:text-error-crimson p-1.5 rounded transition mt-0.5"
                                   >
                                     <Trash2 size={13} />
                                   </button>
