@@ -1,9 +1,18 @@
 node_modules/
 .env
 .env.local
+.DS_Store
+Thumbs.db
+
+# Next.js Build and Cache
+.next/
+
+# Document uploads and preprocessing cache
+data/uploads/
+data/preprocessed/
+
+# Other input/output directories
 data/output/*
 !data/output/.gitkeep
 data/input/*
 !data/input/.gitkeep
-.DS_Store
-Thumbs.db

@@ -107,12 +107,15 @@ export async function extractCustomFields(multimodalData, { systemPrompt, userPr
   }
 
   // 3. 执行调用
+  const keyInstructions = `\n\n【关键规范】：返回的 JSON 数组中，每一个对象必须严格且只能使用以下指定的英文属性键名（Property Keys），严禁自定义或使用中文列名作为 JSON 的键名：\n${fields.map(f => `- "${f.key}": 对应“${f.label}”（${f.desc || ''}）`).join('\n')}`;
+  const enhancedSystemPrompt = `${systemPrompt}${keyInstructions}`;
+
   try {
     console.log('⏳ 正在尝试使用 Structured Outputs (json_schema) 模式...');
     const response = await openai.chat.completions.create({
       model: model,
       messages: [
-        { role: 'system', content: systemPrompt },
+        { role: 'system', content: enhancedSystemPrompt },
         { role: 'user', content: contentArray }
       ],
       response_format: {
@@ -127,9 +130,14 @@ export async function extractCustomFields(multimodalData, { systemPrompt, userPr
 
     const rawContent = response.choices[0].message.content;
     const parsed = JSON.parse(rawContent);
+    const results = parsed.results || [];
     
+    // 容错处理：大模型有时没有严格遵循 schema key，而是返回了中文列名或别名作为键值，进行防御性转换对齐
+    const translated = translateResultKeys(results, fields);
+
     return {
-      data: parsed.results || [],
+      data: translated,
+      raw: rawContent,
       usage: response.usage ? {
         promptTokens: response.usage.prompt_tokens,
         completionTokens: response.usage.completion_tokens,
@@ -141,21 +149,35 @@ export async function extractCustomFields(multimodalData, { systemPrompt, userPr
     console.warn('⚠️ completions.create (json_schema) 失败或不支持，自动降级为 JSON Mode 兼容提取:', parseError.message);
 
     // 强引导提示词
-    const fallbackSystemPrompt = `${systemPrompt}\n\n【关键规范】：你必须且只能返回一个合法的 JSON 格式，顶级键名必须为 "results"，其值是一个数组。不要包含 markdown 格式标记，直接输出 JSON 文本。
+    const fallbackSystemPrompt = `${enhancedSystemPrompt}\n\n【关键规范】：你必须且只能返回一个合法的 JSON 格式，顶级键名必须为 "results"，其值是一个数组。不要包含 markdown 格式标记，直接输出 JSON 文本。
 每个对象必须包含以下字段: ${JSON.stringify(required)}。若字段在文中未提及，设为空字符串 ""。`;
 
-    const response = await openai.chat.completions.create({
-      model: model,
-      messages: [
-        { role: 'system', content: fallbackSystemPrompt },
-        { role: 'user', content: contentArray }
-      ],
-      response_format: { type: 'json_object' }
-    });
+    let response;
+    try {
+      response = await openai.chat.completions.create({
+        model: model,
+        messages: [
+          { role: 'system', content: fallbackSystemPrompt },
+          { role: 'user', content: contentArray }
+        ],
+        response_format: { type: 'json_object' }
+      });
+    } catch (apiErr) {
+      // 接口调用彻底失败，直接向外抛出
+      throw apiErr;
+    }
 
     let rawContent = response.choices[0].message.content;
+    const usage = response.usage ? {
+      promptTokens: response.usage.prompt_tokens,
+      completionTokens: response.usage.completion_tokens,
+      totalTokens: response.usage.total_tokens
+    } : null;
+
     if (!rawContent) {
-      throw new Error('降级 JSON Mode 调用未返回任何内容');
+      const err = new Error('降级 JSON Mode 调用未返回任何内容');
+      err.usage = usage;
+      throw err;
     }
 
     rawContent = rawContent.trim();
@@ -163,16 +185,64 @@ export async function extractCustomFields(multimodalData, { systemPrompt, userPr
       rawContent = rawContent.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
     }
 
-    const parsed = JSON.parse(rawContent);
-    return {
-      data: parsed.results || [],
-      usage: response.usage ? {
-        promptTokens: response.usage.prompt_tokens,
-        completionTokens: response.usage.completion_tokens,
-        totalTokens: response.usage.total_tokens
-      } : null
-    };
+    try {
+      const parsed = JSON.parse(rawContent);
+      const results = parsed.results || [];
+      const translated = translateResultKeys(results, fields);
+
+      return {
+        data: translated,
+        raw: rawContent,
+        usage: usage
+      };
+    } catch (jsonErr) {
+      // JSON 解析失败，仍然需要将已消耗的 token 统计和原始文本挂载至 Error 对象抛出
+      const err = new Error(`大模型返回了非法的 JSON 格式，解析失败: ${jsonErr.message}`);
+      err.raw = rawContent;
+      err.usage = usage;
+      throw err;
+    }
   }
+}
+
+/**
+ * 防御性字段键名映射转换器
+ */
+function translateResultKeys(results, fields) {
+  if (!Array.isArray(results)) return [];
+  return results.map(item => {
+    const newItem = {};
+    fields.forEach(f => {
+      const targetKey = f.key;
+      const targetLabel = f.label;
+      let foundValue = undefined;
+
+      // 1. 优先完全匹配 English key
+      if (item[targetKey] !== undefined) {
+        foundValue = item[targetKey];
+      }
+      // 2. 其次匹配中文 Label 标签
+      else if (item[targetLabel] !== undefined) {
+        foundValue = item[targetLabel];
+      }
+      // 3. 防御性模糊/包含匹配
+      else {
+        const cleanKey = targetKey.trim().toLowerCase();
+        const cleanLabel = targetLabel.trim().toLowerCase();
+        for (const itemKey of Object.keys(item)) {
+          const cleanItemKey = itemKey.trim().toLowerCase();
+          if (cleanItemKey === cleanKey || cleanItemKey === cleanLabel || cleanItemKey.includes(cleanLabel) || cleanLabel.includes(cleanItemKey)) {
+            foundValue = item[itemKey];
+            break;
+          }
+        }
+      }
+
+      // 确保输出为 String 格式，便于表格就地编辑和防崩溃处理
+      newItem[targetKey] = foundValue !== undefined && foundValue !== null ? String(foundValue) : '';
+    });
+    return newItem;
+  });
 }
 
 /**

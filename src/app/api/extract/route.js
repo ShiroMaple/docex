@@ -144,7 +144,7 @@ export async function POST(request) {
 
     // ── 调用大模型 ──
     console.log(`🤖 [MD5: ${md5}] 提交大模型提取，字段数: ${fields.length}...`);
-    const { data, usage } = await extractCustomFields(multimodalData, {
+    const { data, raw, usage } = await extractCustomFields(multimodalData, {
       systemPrompt,
       userPrompt,
       fields,
@@ -154,11 +154,16 @@ export async function POST(request) {
     return NextResponse.json({
       success: true,
       data,
+      raw,
       tokenUsage: usage
     });
 
   } catch (err) {
     console.error('提取失败:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ 
+      error: err.message,
+      raw: err.raw || null,
+      tokenUsage: err.usage || null
+    }, { status: 500 });
   }
 }
