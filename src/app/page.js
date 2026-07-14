@@ -1052,9 +1052,9 @@ export default function DocumentExtractor() {
     if (activeStep === 3) progressWidth = '100%';
 
     return (
-      <div className="max-w-xl mx-auto mb-14 mt-4 relative select-none">
+      <div className="w-[300px] relative select-none">
         {/* Background connector line */}
-        <div className="absolute top-5 left-5 right-5 h-0.5 bg-warm-sand -translate-y-1/2 z-0">
+        <div className="absolute top-4 left-4 right-4 h-0.5 bg-warm-sand -translate-y-1/2 z-0">
           {/* Active progress connector line */}
           <div
             className="h-full bg-terracotta transition-all duration-500 ease-in-out"
@@ -1063,7 +1063,7 @@ export default function DocumentExtractor() {
         </div>
 
         {/* Circles container */}
-        <div className="relative z-10 flex justify-between items-center h-10">
+        <div className="relative z-10 flex justify-between items-center h-8">
           {steps.map((step) => {
             const isActive = activeStep === step.number;
             const isDone = step.done;
@@ -1072,7 +1072,6 @@ export default function DocumentExtractor() {
               <div
                 key={step.number}
                 onClick={() => {
-                  // Navigation guards
                   if (step.number === 2 && filesQueue.length === 0) {
                     showToast('请先上传或选择待解析文档！');
                     return;
@@ -1083,10 +1082,10 @@ export default function DocumentExtractor() {
                   }
                   setActiveStep(step.number);
                 }}
-                className="flex flex-col items-center justify-center cursor-pointer group w-10 h-10 relative"
+                className="flex flex-col items-center justify-center cursor-pointer group w-8 h-8 relative"
               >
                 <div
-                  className={`w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold text-xs transition-all duration-300 ${isDone
+                  className={`w-8 h-8 rounded-full border-2 flex items-center justify-center font-bold text-[10px] transition-all duration-300 ${isDone
                     ? 'border-green-600 bg-green-50 text-green-700'
                     : isActive
                       ? 'border-terracotta bg-ivory text-terracotta shadow-[0_0_8px_rgba(201,100,66,0.35)]'
@@ -1094,15 +1093,15 @@ export default function DocumentExtractor() {
                     }`}
                 >
                   {isDone ? (
-                    <CheckCircle2 size={14} className="text-green-600" />
+                    <CheckCircle2 size={11} className="text-green-600" />
                   ) : (
                     <span>{step.number}</span>
                   )}
                 </div>
 
-                <div className="absolute top-12 left-1/2 -translate-x-1/2 whitespace-nowrap text-center">
+                <div className="absolute top-10 left-1/2 -translate-x-1/2 whitespace-nowrap text-center">
                   <span
-                    className={`text-xs transition-all duration-300 tracking-wider ${isActive
+                    className={`text-[10px] tracking-wider transition-all duration-300 ${isActive
                       ? 'text-near-black font-bold'
                       : isDone
                         ? 'text-green-700 font-semibold'
@@ -1234,7 +1233,7 @@ export default function DocumentExtractor() {
                       className="w-full bg-terracotta hover:bg-terracotta-hover text-ivory text-xs font-semibold py-2 rounded transition flex items-center justify-center gap-1.5"
                     >
                       {isConnectingTable && <Loader2 size={12} className="animate-spin" />}
-                      {isConnectingTable ? '同步校验中...' : '验证并同步字段'}
+                      {isConnectingTable ? '同步校验中...' : '验证权限并同步字段'}
                     </button>
 
                     {tableConnectionError && (
@@ -1249,7 +1248,7 @@ export default function DocumentExtractor() {
                           rel="noopener noreferrer"
                           className="text-xs text-terracotta font-bold flex items-center gap-1 hover:underline"
                         >
-                          打开表格网页 <ExternalLink size={10} />
+                          打开多维表格页面 <ExternalLink size={10} />
                         </a>
                       </div>
                     )}
@@ -1350,10 +1349,7 @@ export default function DocumentExtractor() {
         </div>
       </header>
 
-      {/* ── Page Progress Tabs Header ── */}
-      <div className="max-w-[1440px] mx-auto px-6 mt-8">
-        {renderWizardIndicator()}
-      </div>
+
 
       {/* ── Main Stream Workspace with Framer Motion Page Switching ── */}
       <main className="max-w-[1440px] mx-auto px-6 mt-4">
@@ -2004,7 +2000,7 @@ export default function DocumentExtractor() {
                               rel="noopener noreferrer"
                               className="text-terracotta font-bold hover:underline inline-flex items-center gap-1 mt-2"
                             >
-                              网页端直达云表查看结果 <ExternalLink size={11} />
+                              前往多维表格查看结果 <ExternalLink size={11} />
                             </a>
                           )}
                         </div>
@@ -2021,11 +2017,11 @@ export default function DocumentExtractor() {
       </main>
 
       {/* ── Sticky Bottom Action Bar ── */}
-      <div className="sticky bottom-0 left-0 right-0 z-30 border-t border-border-cream bg-[#f5f4ed]/80 backdrop-blur-md py-4 shadow-[0_-4px_12px_rgba(20,20,19,0.03)] mt-12">
-        <div className="max-w-[1440px] mx-auto px-6 flex justify-between items-center">
+      <div className="sticky bottom-0 left-0 right-0 z-30 border-t border-border-cream bg-[#f5f4ed]/85 backdrop-blur-md pt-3 pb-6 shadow-[0_-4px_12px_rgba(20,20,19,0.03)] mt-12">
+        <div className="max-w-[1440px] mx-auto px-6 grid grid-cols-3 items-center">
 
           {/* Left Side Buttons */}
-          <div>
+          <div className="flex justify-start">
             {activeStep === 2 && (
               <button
                 onClick={() => setActiveStep(1)}
@@ -2046,8 +2042,13 @@ export default function DocumentExtractor() {
             )}
           </div>
 
+          {/* Center: Progress indicators */}
+          <div className="flex justify-center">
+            {renderWizardIndicator()}
+          </div>
+
           {/* Right Side Buttons */}
-          <div>
+          <div className="flex justify-end">
             {activeStep === 1 && (
               <button
                 onClick={() => {
