@@ -120,15 +120,6 @@
       ]
     },
     {
-      "md5": "ba484dd8b492518909e9087129db8b20",
-      "fileName": "2026-06-22检查问题2.docx",
-      "uploadTime": "2026-07-13T15:10:35.755Z",
-      "status": "failed",
-      "progress": 100,
-      "originalPath": "C:\\Users\\gaoft\\Documents\\CodeSpace\\docex\\data\\uploads\\ba484dd8b492518909e9087129db8b20.docx",
-      "error": "Unexpected end of JSON input"
-    },
-    {
       "md5": "fdfad952a88670a58690982003b2362a",
       "fileName": "2026-06-22检查问题3.docx",
       "uploadTime": "2026-07-13T15:13:25.882Z",
@@ -154,6 +145,17 @@
           "mimeType": "image/png"
         }
       ]
+    },
+    {
+      "md5": "ba484dd8b492518909e9087129db8b20",
+      "fileName": "2026-06-22检查问题2.docx",
+      "uploadTime": "2026-07-14T00:21:15.212Z",
+      "status": "done",
+      "progress": 100,
+      "originalPath": "C:\\Users\\gaoft\\Documents\\CodeSpace\\docex\\data\\uploads\\ba484dd8b492518909e9087129db8b20.docx",
+      "error": null,
+      "textPath": "data/preprocessed/ba484dd8b492518909e9087129db8b20/text.txt",
+      "structurePath": "data/preprocessed/ba484dd8b492518909e9087129db8b20/structure.json"
     }
   ]
 }

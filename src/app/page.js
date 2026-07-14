@@ -750,13 +750,28 @@ export default function DocumentExtractor() {
     }
 
     setIsExtracting(false);
-    setExtractingProgress(null);
 
     if (finalError) {
       setExtractionError(finalError);
+      setExtractingProgress(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          currentFile: finalError
+        };
+      });
       showToast(`⚠️ 解析中断：${finalError}`);
       return;
     }
+
+    setExtractingProgress(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        percent: 100,
+        currentFile: '所有文档处理完毕'
+      };
+    });
 
     if (allExtractedIssues.length > 0) {
       showToast('所有文档提取成功！');
@@ -979,7 +994,7 @@ export default function DocumentExtractor() {
           <div className="flex items-center gap-3">
             <span className="text-xl">📚</span>
             <span className="font-serif font-bold text-lg leading-none tracking-tight">DocEx</span>
-            <span className="text-xs font-bold tracking-wider text-olive-gray bg-warm-sand px-2 py-0.5 rounded-full uppercase">V2.0 智能提取</span>
+            <span className="text-x font-bold tracking-wider text-olive-gray bg-warm-sand px-2 py-0.5 rounded-full uppercase">智能文档数据结构化提取</span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -1564,17 +1579,29 @@ export default function DocumentExtractor() {
                 </div>
 
                 {/* ⏳ Real-time Extraction Progress indicator */}
-                {isExtracting && extractingProgress && (
+                {extractingProgress && (
                   <div className="border border-border-warm bg-warm-sand/10 rounded-xl p-5 mb-6 flex flex-col gap-4 shadow-sm">
                     <div className="flex items-center justify-between text-xs text-olive-gray font-semibold">
                       <div className="flex items-center gap-2">
-                        <Loader2 className="w-4 h-4 text-terracotta animate-spin" />
-                        <span>正在进行 AI 解析提取：</span>
+                        {isExtracting ? (
+                          <Loader2 className="w-4 h-4 text-terracotta animate-spin" />
+                        ) : extractionError ? (
+                          <AlertTriangle className="w-4 h-4 text-error-crimson" />
+                        ) : (
+                          <CheckCircle2 className="w-4 h-4 text-green-600" />
+                        )}
+                        <span>
+                          {isExtracting
+                            ? '正在进行 AI 解析提取：'
+                            : extractionError
+                            ? '⚠️ AI 解析发生异常中断：'
+                            : '🎉 所有文档已成功解析提取！'}
+                        </span>
                         <span className="text-near-black font-bold">
                           第 {extractingProgress.currentIndex} / {extractingProgress.totalFiles} 个文档
                         </span>
                       </div>
-                      <span className="text-terracotta font-bold text-sm">
+                      <span className={`${extractionError ? 'text-error-crimson' : isExtracting ? 'text-terracotta' : 'text-green-600'} font-bold text-sm`}>
                         {extractingProgress.percent}%
                       </span>
                     </div>
@@ -1582,15 +1609,32 @@ export default function DocumentExtractor() {
                     {/* Progress Bar Container */}
                     <div className="w-full bg-warm-sand/40 h-2 rounded-full overflow-hidden border border-border-warm/30">
                       <div
-                        className="bg-terracotta h-full transition-all duration-500 ease-out"
+                        className={`h-full transition-all duration-500 ease-out ${
+                          extractionError
+                            ? 'bg-error-crimson'
+                            : isExtracting
+                            ? 'bg-terracotta'
+                            : 'bg-green-600'
+                        }`}
                         style={{ width: `${extractingProgress.percent}%` }}
                       />
                     </div>
 
                     <div className="flex flex-col gap-2">
                       <span className="text-xs text-olive-gray flex items-center gap-1.5">
-                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-terracotta animate-ping" />
-                        当前文档: <strong className="text-near-black truncate max-w-md">{extractingProgress.currentFile}</strong>
+                        {isExtracting && (
+                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-terracotta animate-ping" />
+                        )}
+                        <span>
+                          {isExtracting
+                            ? '当前文档: '
+                            : extractionError
+                            ? '原因描述: '
+                            : '处理结果: '}
+                        </span>
+                        <strong className={`${extractionError ? 'text-error-crimson' : 'text-near-black'} truncate max-w-md`}>
+                          {extractingProgress.currentFile}
+                        </strong>
                       </span>
 
                       {/* File Queue Mini Matrix Status */}
@@ -1820,7 +1864,7 @@ export default function DocumentExtractor() {
                 className="border border-stone-gray hover:border-near-black text-olive-gray hover:text-near-black px-4 py-2 rounded text-xs font-semibold flex items-center gap-1.5 transition bg-white shadow-sm"
               >
                 <ArrowLeft size={14} />
-                <span>返回修改字段</span>
+                <span>返回上一步</span>
               </button>
             )}
           </div>
