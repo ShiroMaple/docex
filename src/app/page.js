@@ -27,10 +27,10 @@ import {
 import * as XLSX from 'xlsx';
 
 const DEFAULT_SYSTEM_PROMPT = `你是一个专业的安全检查报告解析专家。
-你的任务是：根据输入的报告文档内容（包含文字参考层、表格结构以及视觉截图），提取出所有的安全隐患（问题）。
-请依据字段定义完整提取，表格和图片中的信息同样重要，必须提取。
+你的任务是：根据输入的文档内容（包含文字参考层、表格结构以及视觉截图），提取出所有的安全隐患（问题）。
+请依据字段定义完整提取，表格和图片中包含的信息同样重要。
 检查日期尽量转化为 YYYY-MM-DD 格式，如无法转化则保持原文。
-文档中可能包含多个安全问题，必须区分不同问题的间隔，确保返回的 results 数组中的每一项都代表一个独立的安全问题。`;
+文档中可能包含多个安全问题，必须区分不同问题，确保返回的 results 数组中的每一项都代表一个独立的安全问题。`;
 
 const DEFAULT_FIELDS = [
   { key: 'projectName', label: '项目名称', desc: '隐患对应的项目或工程名称', example: '', isAdvancedOpen: false },
@@ -135,7 +135,7 @@ export default function DocumentExtractor() {
       provider: 'XiaoMi',
       baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
       model: 'mimo-v2.5',
-      apiKey: 'tp-cztx8dkny90biwbunzbcm2zxemvt8djnprgmpi8ymcbnj6l0',
+      apiKey: '',
       isDefault: true
     };
 
@@ -235,17 +235,15 @@ export default function DocumentExtractor() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
-  // Auto-connect default LLM and Table presets
+  // Auto-connect default LLM presets
   useEffect(() => {
-    const isDefaultLlm = llmConfig.apiKey === 'tp-cztx8dkny90biwbunzbcm2zxemvt8djnprgmpi8ymcbnj6l0' &&
-      llmConfig.baseUrl === 'https://token-plan-cn.xiaomimimo.com/v1' &&
-      llmConfig.model === 'mimo-v2.5';
+    const isDefaultLlm = selectedConfigId === 'default';
     if (isDefaultLlm) {
       setLlmConnected(true);
       setLlmSupportVision(true);
       setActiveModelLabel('mimo-v2.5 (默认已测试)');
     }
-  }, [llmConfig.apiKey, llmConfig.baseUrl, llmConfig.model]);
+  }, [selectedConfigId]);
 
   useEffect(() => {
     const isDefaultWps = platform === 'wps' && wpsFileId === 'cbGbLglUXASe';

@@ -1,12 +1,23 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { config } from '../../../config.js';
 
 /**
  * 验证大模型可用性及多模态 Vision 支持
  */
 export async function POST(request) {
   try {
-    const { apiKey, baseUrl, model } = await request.json();
+    let { apiKey, baseUrl, model } = await request.json();
+
+    if (!apiKey) {
+      apiKey = config.openai.apiKey;
+    }
+    if (!baseUrl) {
+      baseUrl = config.openai.baseUrl;
+    }
+    if (!model) {
+      model = config.openai.model;
+    }
 
     if (!apiKey || !model) {
       return NextResponse.json({ error: 'apiKey 和 model 为必填参数' }, { status: 400 });
