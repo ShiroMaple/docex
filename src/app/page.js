@@ -784,6 +784,9 @@ export default function DocumentExtractor() {
   };
 
   const retryExtractionForFile = async (file) => {
+    const confirmRetry = window.confirm('将移除下表中相关记录，由大模型重新解析，是否确认？');
+    if (!confirmRetry) return;
+
     if (!isTableConnected) {
       alert('请先连接多维表格！');
       return;
@@ -1439,7 +1442,7 @@ export default function DocumentExtractor() {
                 {historyFiles.length > 0 && (
                   <div className="mt-6 border-t border-border-cream pt-4">
                     <h3 className="text-xs font-semibold text-olive-gray mb-3 flex items-center gap-1.5">
-                      <span>📄 历史已缓存文档 (点击复用免重传)</span>
+                      <span>📄 历史已缓存文档 (点击复用无需重复上传)</span>
                     </h3>
 
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
@@ -1688,16 +1691,9 @@ export default function DocumentExtractor() {
             >
               {/* STEP 3 results card */}
               <section className="bg-ivory border border-border-cream rounded-xl p-8 shadow-sm">
-                <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-                  <div className="flex items-center gap-3">
-                    <FileCheck className="w-5 h-5 text-terracotta" />
-                    <h2 className="font-serif font-medium text-lg">步骤 3: 解析结果</h2>
-                    {extractedIssues.length > 0 && (
-                      <span className="text-xs bg-warm-sand/80 text-olive-gray font-semibold px-2.5 py-1 rounded-full border border-border-cream">
-                        共 {extractedIssues.length} 条记录
-                      </span>
-                    )}
-                  </div>
+                <div className="flex items-center gap-3 mb-6">
+                  <FileCheck className="w-5 h-5 text-terracotta" />
+                  <h2 className="font-serif font-medium text-lg">步骤 3: 解析结果</h2>
                 </div>
 
                 {/* ⏳ Real-time Extraction Progress indicator */}
@@ -1716,8 +1712,8 @@ export default function DocumentExtractor() {
                           {isExtracting
                             ? '正在进行 AI 解析提取：'
                             : extractionError
-                            ? '⚠️ AI 解析发生异常中断：'
-                            : '🎉 所有文档已成功解析提取！'}
+                              ? '⚠️ AI 解析发生异常中断：'
+                              : '🎉 所有文档已成功解析提取！'}
                         </span>
                         <span className="text-near-black font-bold">
                           第 {extractingProgress.currentIndex} / {extractingProgress.totalFiles} 个文档
@@ -1731,13 +1727,12 @@ export default function DocumentExtractor() {
                     {/* Progress Bar Container */}
                     <div className="w-full bg-warm-sand/40 h-2 rounded-full overflow-hidden border border-border-warm/30">
                       <div
-                        className={`h-full transition-all duration-500 ease-out ${
-                          extractionError
+                        className={`h-full transition-all duration-500 ease-out ${extractionError
                             ? 'bg-error-crimson'
                             : isExtracting
-                            ? 'bg-terracotta'
-                            : 'bg-green-600'
-                        }`}
+                              ? 'bg-terracotta'
+                              : 'bg-green-600'
+                          }`}
                         style={{ width: `${extractingProgress.percent}%` }}
                       />
                     </div>
@@ -1751,8 +1746,8 @@ export default function DocumentExtractor() {
                           {isExtracting
                             ? '当前文档: '
                             : extractionError
-                            ? '原因描述: '
-                            : '处理结果: '}
+                              ? '原因描述: '
+                              : '处理结果: '}
                         </span>
                         <strong className={`${extractionError ? 'text-error-crimson' : 'text-near-black'} truncate max-w-md`}>
                           {extractingProgress.currentFile}
@@ -1777,6 +1772,11 @@ export default function DocumentExtractor() {
                           }
                           return (
                             <div key={file.md5} className="flex items-center gap-1.5 bg-white border border-border-cream rounded px-2.5 py-1 text-[11px] font-semibold shadow-sm">
+                              {file.fileName.toLowerCase().endsWith('.pdf') ? (
+                                <PdfIcon className="w-3.5 h-3.5 flex-shrink-0" />
+                              ) : (
+                                <WordIcon className="w-3.5 h-3.5 flex-shrink-0" />
+                              )}
                               <span className="text-near-black truncate max-w-[120px]">{file.fileName}</span>
                               <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${badgeBg}`}>
                                 {badgeLabel}
@@ -1861,9 +1861,9 @@ export default function DocumentExtractor() {
 
                     {/* Results grid */}
                     <div className="border border-border-cream rounded-lg bg-white overflow-hidden shadow-sm">
-                      <div className="overflow-x-auto overflow-y-auto max-h-[500px] custom-scrollbar">
+                      <div className="overflow-x-auto custom-scrollbar">
                         <table className="w-full border-collapse text-left text-xs table-fixed">
-                          <thead className="sticky top-0 z-10 bg-parchment border-b border-border-cream shadow-[0_1px_0_0_#e8e6dc]">
+                          <thead className="sticky top-16 z-10 bg-parchment border-b border-border-cream shadow-[0_1px_0_0_#e8e6dc]">
                             <tr>
                               <th className="p-3 font-bold text-near-black w-[4%] text-center whitespace-nowrap">#</th>
                               {fields.map((f, idx) => {
@@ -1925,6 +1925,11 @@ export default function DocumentExtractor() {
                     {/* Action buttons */}
                     <div className="flex justify-between items-center gap-4">
                       <div className="flex items-center gap-2">
+                        {extractedIssues.length > 0 && (
+                          <span className="text-xs bg-warm-sand/80 text-olive-gray font-semibold px-3 py-2 rounded border border-border-cream mr-1">
+                            共 {extractedIssues.length} 条记录
+                          </span>
+                        )}
                         <button
                           onClick={addIssueRow}
                           className="border border-stone-gray hover:border-near-black text-olive-gray hover:text-near-black px-4 py-2 rounded text-xs font-semibold flex items-center gap-1 transition bg-white shadow-sm"
@@ -2044,7 +2049,7 @@ export default function DocumentExtractor() {
                 className="bg-terracotta hover:bg-terracotta-hover text-ivory text-xs font-semibold px-6 py-2.5 rounded transition disabled:opacity-40 flex items-center gap-1.5 shadow-sm"
               >
                 {isPushing && <Loader2 size={12} className="animate-spin" />}
-                <span>{isPushing ? '正在推送数据...' : '🚀 确认识别无误，正式推送至云端表格'}</span>
+                <span>{isPushing ? '正在推送数据...' : '已核对识别结果，推送至多维表格'}</span>
               </button>
             )}
           </div>
