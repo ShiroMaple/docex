@@ -77,7 +77,7 @@ export default function DocumentExtractor() {
 
   // ── Popover: LLM Connection ──
   const [llmConfig, setLlmConfig] = useState({
-    provider: 'openai',
+    provider: 'XiaoMi',
     baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
     model: 'mimo-v2.5',
     apiKey: ''
@@ -87,6 +87,10 @@ export default function DocumentExtractor() {
   const [activeModelLabel, setActiveModelLabel] = useState('');
   const [isTestingLlm, setIsTestingLlm] = useState(false);
   const [llmTestError, setLlmTestError] = useState('');
+
+  const [configList, setConfigList] = useState([]);
+  const [selectedConfigId, setSelectedConfigId] = useState('default');
+  const [customConfigName, setCustomConfigName] = useState('');
 
   // ── Step 1: Upload & Queue ──
   const [filesQueue, setFilesQueue] = useState([]); // Array of { md5, fileName, size, progress, status, error }
@@ -119,19 +123,42 @@ export default function DocumentExtractor() {
   // ── Load credentials & configurations ──
   useEffect(() => {
     // Load LLM credentials
-    const cachedLlm = localStorage.getItem('docex_llm_config');
-    if (cachedLlm) {
+    const defaultConf = {
+      id: 'default',
+      name: '默认配置',
+      provider: 'XiaoMi',
+      baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
+      model: 'mimo-v2.5',
+      apiKey: 'tp-cztx8dkny90biwbunzbcm2zxemvt8djnprgmpi8ymcbnj6l0',
+      isDefault: true
+    };
+
+    const cachedList = localStorage.getItem('docex_llm_config_list');
+    let loadedList = [];
+    if (cachedList) {
       try {
-        const parsed = JSON.parse(cachedLlm);
-        setLlmConfig(prev => ({ ...prev, ...parsed }));
+        loadedList = JSON.parse(cachedList);
       } catch { }
-    } else {
-      // Default fallback key
-      setLlmConfig(prev => ({
-        ...prev,
-        apiKey: 'tp-cztx8dkny90biwbunzbcm2zxemvt8djnprgmpi8ymcbnj6l0'
-      }));
     }
+
+    const hasDefault = loadedList.some(c => c.id === 'default');
+    if (!hasDefault) {
+      loadedList = [defaultConf, ...loadedList];
+    } else {
+      loadedList = loadedList.map(c => c.id === 'default' ? defaultConf : c);
+    }
+    setConfigList(loadedList);
+
+    const activeId = localStorage.getItem('docex_active_llm_config_id') || 'default';
+    const activeConfig = loadedList.find(c => c.id === activeId) || defaultConf;
+    setLlmConfig({
+      provider: activeConfig.provider,
+      baseUrl: activeConfig.baseUrl,
+      model: activeConfig.model,
+      apiKey: activeConfig.apiKey
+    });
+    setSelectedConfigId(activeConfig.id);
+    setCustomConfigName(activeConfig.isDefault ? '' : activeConfig.name);
 
     // Load URL presets
     const cachedWpsUrl = localStorage.getItem('docex_wps_url');
@@ -357,13 +384,110 @@ export default function DocumentExtractor() {
       setLlmConnected(true);
       setActiveModelLabel(data.model);
 
-      localStorage.setItem('docex_llm_config', JSON.stringify(llmConfig));
+      if (selectedConfigId === 'default') {
+        showToast('🎉 默认配置测试连接成功！');
+      } else {
+        let nameToUse = customConfigName.trim();
+        if (!nameToUse) {
+          const customConfigs = configList.filter(c => !c.isDefault);
+          const nextSeq = customConfigs.length + 1;
+          nameToUse = `自定义模型配置 ${nextSeq}`;
+        }
+
+        let updatedList = [];
+        let savedId = selectedConfigId;
+
+        if (selectedConfigId === 'new') {
+          const newId = `config_${Date.now()}`;
+          const newConfig = {
+            id: newId,
+            name: nameToUse,
+            provider: llmConfig.provider,
+            baseUrl: llmConfig.baseUrl,
+            model: llmConfig.model,
+            apiKey: llmConfig.apiKey,
+            isDefault: false
+          };
+          updatedList = [...configList, newConfig];
+          savedId = newId;
+        } else {
+          updatedList = configList.map(c => {
+            if (c.id === selectedConfigId) {
+              return {
+                ...c,
+                name: nameToUse,
+                provider: llmConfig.provider,
+                baseUrl: llmConfig.baseUrl,
+                model: llmConfig.model,
+                apiKey: llmConfig.apiKey
+              };
+            }
+            return c;
+          });
+        }
+
+        setConfigList(updatedList);
+        setSelectedConfigId(savedId);
+        setCustomConfigName(nameToUse);
+        localStorage.setItem('docex_llm_config_list', JSON.stringify(updatedList));
+        localStorage.setItem('docex_active_llm_config_id', savedId);
+        localStorage.setItem('docex_llm_config', JSON.stringify(llmConfig));
+        showToast(`🎉 配置 [${nameToUse}] 保存并测试连接成功！`);
+      }
 
     } catch (err) {
       setLlmTestError(err.message);
     } finally {
       setIsTestingLlm(false);
     }
+  };
+
+  const handleConfigChange = (id) => {
+    setSelectedConfigId(id);
+    if (id === 'new') {
+      setLlmConfig({
+        provider: 'openai',
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-4o-mini',
+        apiKey: ''
+      });
+      setCustomConfigName('');
+    } else {
+      const selected = configList.find(c => c.id === id);
+      if (selected) {
+        setLlmConfig({
+          provider: selected.provider,
+          baseUrl: selected.baseUrl,
+          model: selected.model,
+          apiKey: selected.apiKey
+        });
+        setCustomConfigName(selected.isDefault ? '' : selected.name);
+      }
+    }
+  };
+
+  const handleDeleteConfig = (id) => {
+    if (id === 'default') return;
+    if (!confirm('确定要删除此模型配置吗？')) return;
+
+    const updatedList = configList.filter(c => c.id !== id);
+    setConfigList(updatedList);
+    localStorage.setItem('docex_llm_config_list', JSON.stringify(updatedList));
+
+    setSelectedConfigId('default');
+    const defaultConf = updatedList.find(c => c.id === 'default');
+    if (defaultConf) {
+      setLlmConfig({
+        provider: defaultConf.provider,
+        baseUrl: defaultConf.baseUrl,
+        model: defaultConf.model,
+        apiKey: defaultConf.apiKey
+      });
+      setCustomConfigName('');
+      localStorage.setItem('docex_active_llm_config_id', 'default');
+      localStorage.setItem('docex_llm_config', JSON.stringify(defaultConf));
+    }
+    showToast('🗑️ 配置删除成功，已恢复为默认配置');
   };
 
   const optimizePrompt = async () => {
@@ -1142,7 +1266,7 @@ export default function DocumentExtractor() {
           <div className="flex items-center gap-3">
             <span className="text-xl">📚</span>
             <span className="font-serif font-bold text-lg leading-none tracking-tight">DocEx</span>
-            <span className="text-x font-bold tracking-wider text-olive-gray bg-warm-sand px-2 py-0.5 rounded-full uppercase">智能文档数据结构化提取</span>
+            <span className="text-x font-bold tracking-wider text-olive-gray bg-warm-sand px-2 py-0.5 rounded-full uppercase">智能结构化提取文档数据</span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -1281,13 +1405,55 @@ export default function DocumentExtractor() {
                     <h4 className="font-serif font-medium text-sm border-b border-border-cream pb-2 mb-3">大模型网关配置</h4>
 
                     <div className="flex flex-col gap-3 mb-4">
+                      {/* Configuration selector */}
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-olive-gray uppercase tracking-wider">选择模型配置</label>
+                        <div className="flex gap-1.5">
+                          <select
+                            value={selectedConfigId}
+                            onChange={(e) => handleConfigChange(e.target.value)}
+                            className="flex-1 bg-warm-sand border border-border-warm rounded px-2 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue transition text-near-black"
+                          >
+                            {configList.map(c => (
+                              <option key={c.id} value={c.id}>
+                                {c.name} {c.isDefault ? '(默认)' : ''}
+                              </option>
+                            ))}
+                            <option value="new">➕ 新建自定义配置</option>
+                          </select>
+                          {selectedConfigId !== 'default' && selectedConfigId !== 'new' && (
+                            <button
+                              onClick={() => handleDeleteConfig(selectedConfigId)}
+                              className="p-1.5 rounded border border-border-cream bg-white hover:bg-red-50 text-stone-gray hover:text-error-crimson transition"
+                              title="删除该配置"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {selectedConfigId !== 'default' && (
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs font-bold text-olive-gray uppercase tracking-wider">配置命名</label>
+                          <input
+                            type="text"
+                            value={customConfigName}
+                            onChange={(e) => setCustomConfigName(e.target.value)}
+                            className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue transition w-full"
+                            placeholder="自定义模型配置名称"
+                          />
+                        </div>
+                      )}
+
                       <div className="flex flex-col gap-1">
                         <label className="text-xs font-bold text-olive-gray uppercase tracking-wider">Provider</label>
                         <input
                           type="text"
                           value={llmConfig.provider}
                           onChange={(e) => setLlmConfig({ ...llmConfig, provider: e.target.value })}
-                          className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full"
+                          disabled={selectedConfigId === 'default'}
+                          className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full disabled:opacity-60"
                           placeholder="openai"
                         />
                       </div>
@@ -1297,7 +1463,8 @@ export default function DocumentExtractor() {
                           type="text"
                           value={llmConfig.baseUrl}
                           onChange={(e) => setLlmConfig({ ...llmConfig, baseUrl: e.target.value })}
-                          className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full"
+                          disabled={selectedConfigId === 'default'}
+                          className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full disabled:opacity-60"
                           placeholder="https://api.openai.com/v1"
                         />
                       </div>
@@ -1307,7 +1474,8 @@ export default function DocumentExtractor() {
                           type="text"
                           value={llmConfig.model}
                           onChange={(e) => setLlmConfig({ ...llmConfig, model: e.target.value })}
-                          className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full"
+                          disabled={selectedConfigId === 'default'}
+                          className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full disabled:opacity-60"
                           placeholder="gpt-4o-mini"
                         />
                       </div>
@@ -1317,7 +1485,8 @@ export default function DocumentExtractor() {
                           type="password"
                           value={llmConfig.apiKey}
                           onChange={(e) => setLlmConfig({ ...llmConfig, apiKey: e.target.value })}
-                          className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full"
+                          disabled={selectedConfigId === 'default'}
+                          className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full disabled:opacity-60"
                           placeholder="••••••••••••••••••••"
                         />
                       </div>
