@@ -5,9 +5,9 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DB_PATH = path.resolve(__dirname, '../../data/db.json');
-const PREPROCESS_DIR = path.resolve(__dirname, '../../data/preprocessed');
-const UPLOAD_DIR = path.resolve(__dirname, '../../data/uploads');
+const DB_PATH = path.resolve(process.cwd(), 'data/db.json');
+const PREPROCESS_DIR = path.resolve(process.cwd(), 'data/preprocessed');
+const UPLOAD_DIR = path.resolve(process.cwd(), 'data/uploads');
 
 // Ensure database file and directories exist
 async function initDb() {

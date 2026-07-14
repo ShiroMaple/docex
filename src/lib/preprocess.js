@@ -13,7 +13,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).toString();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PREPROCESS_DIR = path.resolve(__dirname, '../../data/preprocessed');
+const PREPROCESS_DIR = path.resolve(process.cwd(), 'data/preprocessed');
 
 /**
  * 计算文件的 MD5 值

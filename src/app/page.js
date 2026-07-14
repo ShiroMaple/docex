@@ -1844,9 +1844,31 @@ export default function DocumentExtractor() {
                                 </span>
                               </div>
                             ) : (
-                              <span className={`text-xs font-bold mt-0.5 flex-shrink-0 ${item.status === 'done' ? 'text-green-600' : 'text-error-crimson'}`}>
-                                {item.status === 'done' ? '就绪' : '失败'}
-                              </span>
+                              <div className="w-full flex flex-col items-center flex-shrink-0 min-h-[22px]">
+                                <span 
+                                  className={`text-xs font-bold flex items-center gap-0.5 cursor-help ${
+                                    item.status === 'done' ? 'text-green-600' : 'text-error-crimson'
+                                  }`}
+                                  title={item.status === 'failed' ? `失败详情: ${item.error || '解析失败'}` : undefined}
+                                >
+                                  {item.status === 'done' ? (
+                                    '就绪'
+                                  ) : (
+                                    <>
+                                      <span>失败</span>
+                                      <AlertTriangle size={10} className="text-error-crimson animate-pulse" />
+                                    </>
+                                  )}
+                                </span>
+                                {item.status === 'failed' && (
+                                  <span 
+                                    className="text-[9px] text-error-crimson truncate w-full px-1 text-center font-medium block max-w-[80px]"
+                                    title={item.error}
+                                  >
+                                    {item.error || '解析失败'}
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </div>
                         ))}

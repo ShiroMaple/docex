@@ -8,7 +8,7 @@ import { getFileRecord, saveFileRecord, runTtlCleanup } from '../../../lib/db.js
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const UPLOAD_DIR = path.resolve(__dirname, '../../../../data/uploads');
+const UPLOAD_DIR = path.resolve(process.cwd(), 'data/uploads');
 
 export async function POST(request) {
   try {

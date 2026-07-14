@@ -10,7 +10,7 @@ import { checkRateLimit } from '../../../lib/rateLimit.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PREPROCESS_DIR = path.resolve(__dirname, '../../../../data/preprocessed');
+const PREPROCESS_DIR = path.resolve(process.cwd(), 'data/preprocessed');
 
 /**
  * 提示词攻击防御网关 (Prompt Injection & Privacy Leak Shield)
