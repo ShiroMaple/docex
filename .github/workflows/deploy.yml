@@ -62,6 +62,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_KEY }}
+          port: 29922
           source: "release.tar.gz"
           target: "/var/www/docex"
 
@@ -72,6 +73,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_KEY }}
+          port: 29922
           script: |
             cd /var/www/docex
             # 解压并覆盖旧文件，随后清理压缩包
