@@ -35,9 +35,25 @@ export async function POST(request) {
     // 1. 计算 MD5
     const md5 = calculateMd5(buffer);
     
-    // 2. 检查 MD5 是否已存在
+    // 2. 检查 MD5 是否已存在且物理文件完备
     const existing = await getFileRecord(md5);
-    if (existing) {
+    let physicalExists = false;
+    if (existing && existing.status === 'done') {
+      const PREPROCESS_DIR = path.resolve(process.cwd(), 'data/preprocessed');
+      const targetDir = path.join(PREPROCESS_DIR, md5);
+      try {
+        if (ext === '.pdf') {
+          await fs.access(path.join(targetDir, 'text.txt'));
+        } else if (ext === '.docx') {
+          await fs.access(path.join(targetDir, 'structure.json'));
+        }
+        physicalExists = true;
+      } catch {
+        console.warn(`⚠️ [MD5: ${md5}] 数据库标记已处理，但物理文件缺失，将重新触发解析。`);
+      }
+    }
+
+    if (existing && (existing.status !== 'done' || physicalExists)) {
       console.log(`🎯 [MD5: ${md5}] 文件已存在且已被预处理，直接复用记录。`);
       return NextResponse.json({ 
         success: true, 

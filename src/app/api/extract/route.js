@@ -107,51 +107,58 @@ export async function POST(request) {
 
     const ext = path.extname(record.fileName).toLowerCase();
 
-    if (ext === '.pdf') {
-      // 读取 PDF 文字层
-      const textPath = path.join(outputDir, 'text.txt');
-      const textContent = await fs.readFile(textPath, 'utf-8').catch(() => '');
+    try {
+      if (ext === '.pdf') {
+        // 读取 PDF 文字层
+        const textPath = path.join(outputDir, 'text.txt');
+        const textContent = await fs.readFile(textPath, 'utf-8').catch(() => '');
 
-      // 读取 PNG 截图并转换为 Base64
-      const images = [];
-      if (record.images && record.images.length > 0) {
-        for (const imgRecord of record.images) {
-          const imgFileName = path.basename(imgRecord.path);
-          const imgFullPath = path.join(outputDir, imgFileName);
-          
-          const imgBuffer = await fs.readFile(imgFullPath);
-          images.push({
-            data: imgBuffer.toString('base64'),
-            mimeType: imgRecord.mimeType
-          });
+        // 读取 PNG 截图并转换为 Base64
+        const images = [];
+        if (record.images && record.images.length > 0) {
+          for (const imgRecord of record.images) {
+            const imgFileName = path.basename(imgRecord.path);
+            const imgFullPath = path.join(outputDir, imgFileName);
+            
+            const imgBuffer = await fs.readFile(imgFullPath);
+            images.push({
+              data: imgBuffer.toString('base64'),
+              mimeType: imgRecord.mimeType
+            });
+          }
         }
-      }
-      multimodalData = { text: textContent, images };
+        multimodalData = { text: textContent, images };
 
-    } else if (ext === '.docx') {
-      // 读取 DOCX 结构
-      const structurePath = path.join(outputDir, 'structure.json');
-      const rawStructure = await fs.readFile(structurePath, 'utf-8');
-      const structure = JSON.parse(rawStructure);
+      } else if (ext === '.docx') {
+        // 读取 DOCX 结构
+        const structurePath = path.join(outputDir, 'structure.json');
+        const rawStructure = await fs.readFile(structurePath, 'utf-8');
+        const structure = JSON.parse(rawStructure);
 
-      // 读取图片文件转化为 Base64 二进制流，还原图文交织结构
-      const parts = [];
-      for (const part of structure) {
-        if (part.type === 'text') {
-          parts.push(part);
-        } else if (part.type === 'image') {
-          const imgFileName = path.basename(part.path);
-          const imgFullPath = path.join(outputDir, imgFileName);
-          
-          const imgBuffer = await fs.readFile(imgFullPath);
-          parts.push({
-            type: 'image',
-            data: imgBuffer.toString('base64'),
-            mimeType: part.mimeType
-          });
+        // 读取图片文件转化为 Base64 二进制流，还原图文交织结构
+        const parts = [];
+        for (const part of structure) {
+          if (part.type === 'text') {
+            parts.push(part);
+          } else if (part.type === 'image') {
+            const imgFileName = path.basename(part.path);
+            const imgFullPath = path.join(outputDir, imgFileName);
+            
+            const imgBuffer = await fs.readFile(imgFullPath);
+            parts.push({
+              type: 'image',
+              data: imgBuffer.toString('base64'),
+              mimeType: part.mimeType
+            });
+          }
         }
+        multimodalData = parts;
       }
-      multimodalData = parts;
+    } catch (fsErr) {
+      console.error('读取文档预处理产物失败:', fsErr);
+      return NextResponse.json({ 
+        error: `读取文档预处理产物失败: ${fsErr.code === 'ENOENT' ? '缓存文件已失效或被物理清理，请在队列中点击 [X] 移除该文档后重新上传解析。' : fsErr.message}` 
+      }, { status: 500 });
     }
 
     // ── 调用大模型 ──
