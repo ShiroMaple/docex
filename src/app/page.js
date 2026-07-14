@@ -1860,10 +1860,10 @@ export default function DocumentExtractor() {
                     )}
 
                     {/* Results grid */}
-                    <div className="border border-border-cream rounded-lg bg-white overflow-hidden shadow-sm">
-                      <div className="overflow-x-auto custom-scrollbar">
+                    <div className="border border-border-cream rounded-lg bg-white shadow-sm overflow-visible">
+                      <div className="overflow-visible">
                         <table className="w-full border-collapse text-left text-xs table-fixed">
-                          <thead className="sticky top-16 z-10 bg-parchment border-b border-border-cream shadow-[0_1px_0_0_#e8e6dc]">
+                          <thead className="sticky top-16 z-10 bg-parchment border-b border-border-cream shadow-[0_1px_0_0_#e8e6dc] [&_th:first-child]:rounded-tl-lg [&_th:last-child]:rounded-tr-lg">
                             <tr>
                               <th className="p-3 font-bold text-near-black w-[4%] text-center whitespace-nowrap">#</th>
                               {fields.map((f, idx) => {
