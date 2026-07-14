@@ -1,12 +1,34 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { config } from '../../../config.js';
+import { checkRateLimit } from '../../../lib/rateLimit.js';
 
 /**
  * 大模型辅助一键优化提示词
  */
 export async function POST(request) {
   try {
-    const { apiKey, baseUrl, model, prompt, fields } = await request.json();
+    let { apiKey, baseUrl, model, prompt, fields } = await request.json();
+
+    const isDefaultKey = !apiKey || apiKey === config.openai.apiKey;
+    if (isDefaultKey) {
+      const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1';
+      if (!checkRateLimit(ip)) {
+        return NextResponse.json({ 
+          error: '⚠️ 访问受限：您当前使用的是系统默认共享 AI 配置，调用太频繁。请稍候再试（限制为 5 次/分钟），或在配置中设置您自有的 API Key 以解除限制。' 
+        }, { status: 429 });
+      }
+    }
+
+    if (!apiKey) {
+      apiKey = config.openai.apiKey;
+    }
+    if (!baseUrl) {
+      baseUrl = config.openai.baseUrl;
+    }
+    if (!model) {
+      model = config.openai.model;
+    }
 
     if (!apiKey || !model) {
       return NextResponse.json({ error: '未配置大模型 API Key 或模型名称，请先在 LLM 配置页中连接并验证' }, { status: 400 });
