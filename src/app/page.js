@@ -1391,7 +1391,7 @@ export default function DocumentExtractor() {
                   }`}
               >
                 <span className={`w-2 h-2 rounded-full ${llmConnected ? 'bg-green-600 shadow-[0_0_6px_#16a34a]' : 'bg-stone-gray'}`} />
-                <span>{llmConnected ? `🤖 模型已连接: ${llmConfig.provider} ${llmConfig.model} (${llmSupportVision ? '多模态模型' : '纯文本模型'})` : '🤖 大语言模型未连接'}</span>
+                <span>{llmConnected ? `🤖 模型已验证: ${llmConfig.provider} ${llmConfig.model} (${llmSupportVision ? '多模态模型' : '纯文本模型'})` : '🤖 模型未验证'}</span>
               </button>
 
               <AnimatePresence>
@@ -1402,7 +1402,7 @@ export default function DocumentExtractor() {
                     exit={{ opacity: 0, y: 10 }}
                     className="absolute right-0 mt-2 w-80 bg-ivory border border-warm-sand rounded-lg p-5 shadow-lg z-50 text-near-black"
                   >
-                    <h4 className="font-serif font-medium text-sm border-b border-border-cream pb-2 mb-3">大模型网关配置</h4>
+                    <h4 className="font-serif font-medium text-sm border-b border-border-cream pb-2 mb-3">AI模型网关配置</h4>
 
                     <div className="flex flex-col gap-3 mb-4">
                       {/* Configuration selector */}
