@@ -1543,6 +1543,32 @@ export default function DocumentExtractor() {
                           className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full"
                           placeholder="自定凭证 App Secret"
                         />
+                        <div className="mt-1 flex flex-col gap-1">
+                          {platform === 'wps' ? (
+                            <a
+                              href="https://365.kdocs.cn/3rd/open/developer/home"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[10px] text-terracotta hover:underline flex items-center gap-0.5 font-semibold"
+                            >
+                              <span>WPS开放平台应用配置</span>
+                              <ExternalLink size={9} />
+                            </a>
+                          ) : (
+                            <a
+                              href="https://open.feishu.cn/app?lang=zh-CN"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[10px] text-terracotta hover:underline flex items-center gap-0.5 font-semibold"
+                            >
+                              <span>飞书开放平台应用配置</span>
+                              <ExternalLink size={9} />
+                            </a>
+                          )}
+                          <p className="text-[10px] text-stone-gray leading-tight">
+                            💡 提示：文档写入时显示身份为应用或应用所有者
+                          </p>
+                        </div>
                       </div>
                     </div>
 
