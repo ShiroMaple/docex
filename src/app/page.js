@@ -734,7 +734,10 @@ export default function DocumentExtractor() {
         // Filter out empty items
         const filtered = rawItems.filter(item => {
           return Object.values(item).some(val => val && val.toString().trim() !== '');
-        });
+        }).map(item => ({
+          ...item,
+          _fileMd5: file.md5
+        }));
 
         // Dynamic streaming append to table
         setExtractedIssues(prev => [...prev, ...filtered]);
@@ -777,6 +780,118 @@ export default function DocumentExtractor() {
       showToast('所有文档提取成功！');
     } else {
       showToast('⚠️ 大模型解析结果为空，已安全熔断！');
+    }
+  };
+
+  const retryExtractionForFile = async (file) => {
+    if (!isTableConnected) {
+      alert('请先连接多维表格！');
+      return;
+    }
+
+    setIsExtracting(true);
+    setExtractionError('');
+
+    // Clear old issues for this specific file
+    setExtractedIssues(prev => prev.filter(item => item._fileMd5 !== file.md5));
+
+    // Update status mapping for the file
+    setFileStatusMap(prev => ({ ...prev, [file.md5]: 'processing' }));
+
+    const readyFiles = filesQueue.filter(f => f.status === 'done');
+    const fileIdx = readyFiles.findIndex(f => f.md5 === file.md5);
+    setExtractingProgress({
+      percent: Math.round((fileIdx >= 0 ? fileIdx : 0) / readyFiles.length * 100),
+      currentFile: file.fileName,
+      currentIndex: (fileIdx >= 0 ? fileIdx : 0) + 1,
+      totalFiles: readyFiles.length
+    });
+
+    const processedFields = fields.map((f, idx) => ({
+      key: f.key ? f.key.trim() : `field_${idx + 1}`,
+      label: f.label || `未命名_${idx + 1}`,
+      desc: f.desc || '',
+      example: f.example || ''
+    }));
+
+    try {
+      const res = await fetch('/api/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          md5: file.md5,
+          systemPrompt: customPrompt,
+          userPrompt: '请分析该文档并提取结构化字段：',
+          fields: processedFields,
+          llmConfig
+        })
+      });
+      const data = await res.json();
+
+      // Accumulate tokens
+      if (data.tokenUsage) {
+        setTokenUsage(prev => {
+          const oldPrompt = prev?.promptTokens || 0;
+          const oldCompletion = prev?.completionTokens || 0;
+          const oldTotal = prev?.totalTokens || 0;
+          return {
+            promptTokens: oldPrompt + (data.tokenUsage.promptTokens || 0),
+            completionTokens: oldCompletion + (data.tokenUsage.completionTokens || 0),
+            totalTokens: oldTotal + (data.tokenUsage.totalTokens || 0)
+          };
+        });
+      }
+
+      // Update raw text response
+      if (data.raw) {
+        setRawLlmResponse(prev => {
+          const header = `/* === 文件: ${file.fileName} (${file.md5}) === */`;
+          let cleaned = prev || '';
+          const idx = cleaned.indexOf(header);
+          if (idx !== -1) {
+            const nextIdx = cleaned.indexOf('/* === 文件:', idx + header.length);
+            if (nextIdx !== -1) {
+              cleaned = cleaned.slice(0, idx) + cleaned.slice(nextIdx);
+            } else {
+              cleaned = cleaned.slice(0, idx);
+            }
+          }
+          return (cleaned.trim() + `\n\n${header}\n${data.raw}`).trim();
+        });
+      }
+
+      if (!res.ok) {
+        throw new Error(data.error || '解析模型提取失败');
+      }
+
+      const rawItems = data.data || [];
+      const filtered = rawItems.filter(item => {
+        return Object.values(item).some(val => val && val.toString().trim() !== '');
+      }).map(item => ({
+        ...item,
+        _fileMd5: file.md5
+      }));
+
+      // Append new issues
+      setExtractedIssues(prev => [...prev, ...filtered]);
+      setFileStatusMap(prev => ({ ...prev, [file.md5]: 'success' }));
+      showToast(`文档 [${file.fileName}] 重新解析成功！`);
+
+    } catch (err) {
+      console.error(`重新解析文件 ${file.fileName} 失败:`, err);
+      setFileStatusMap(prev => ({ ...prev, [file.md5]: 'error' }));
+      setExtractionError(err.message);
+      showToast(`⚠️ 重新解析失败: ${err.message}`);
+    } finally {
+      setIsExtracting(false);
+      setExtractingProgress(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          percent: 100,
+          currentFile: '所有文档处理完毕'
+        };
+      });
     }
   };
 
@@ -1573,9 +1688,16 @@ export default function DocumentExtractor() {
             >
               {/* STEP 3 results card */}
               <section className="bg-ivory border border-border-cream rounded-xl p-8 shadow-sm">
-                <div className="flex items-center gap-3 mb-6">
-                  <FileCheck className="w-5 h-5 text-terracotta" />
-                  <h2 className="font-serif font-medium text-lg">步骤 3: 解析结果</h2>
+                <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+                  <div className="flex items-center gap-3">
+                    <FileCheck className="w-5 h-5 text-terracotta" />
+                    <h2 className="font-serif font-medium text-lg">步骤 3: 解析结果</h2>
+                    {extractedIssues.length > 0 && (
+                      <span className="text-xs bg-warm-sand/80 text-olive-gray font-semibold px-2.5 py-1 rounded-full border border-border-cream">
+                        共 {extractedIssues.length} 条记录
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* ⏳ Real-time Extraction Progress indicator */}
@@ -1654,11 +1776,20 @@ export default function DocumentExtractor() {
                             badgeLabel = '失败 ❌';
                           }
                           return (
-                            <div key={file.md5} className="flex items-center gap-1.5 bg-white border border-border-cream rounded px-2.5 py-1 text-[11px] font-semibold">
+                            <div key={file.md5} className="flex items-center gap-1.5 bg-white border border-border-cream rounded px-2.5 py-1 text-[11px] font-semibold shadow-sm">
                               <span className="text-near-black truncate max-w-[120px]">{file.fileName}</span>
                               <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${badgeBg}`}>
                                 {badgeLabel}
                               </span>
+                              {!isExtracting && (
+                                <button
+                                  onClick={() => retryExtractionForFile(file)}
+                                  title="重新解析此文档"
+                                  className="ml-1 p-0.5 rounded text-stone-gray hover:text-terracotta hover:bg-warm-sand/50 transition flex items-center justify-center"
+                                >
+                                  <RefreshCw size={10} className="hover:rotate-180 transition duration-500" />
+                                </button>
+                              )}
                             </div>
                           );
                         })}
@@ -1730,7 +1861,7 @@ export default function DocumentExtractor() {
 
                     {/* Results grid */}
                     <div className="border border-border-cream rounded-lg bg-white overflow-hidden shadow-sm">
-                      <div className="overflow-x-auto overflow-y-auto max-h-[380px] custom-scrollbar">
+                      <div className="overflow-x-auto overflow-y-auto max-h-[500px] custom-scrollbar">
                         <table className="w-full border-collapse text-left text-xs table-fixed">
                           <thead className="sticky top-0 z-10 bg-parchment border-b border-border-cream shadow-[0_1px_0_0_#e8e6dc]">
                             <tr>
