@@ -606,7 +606,7 @@ export default function DocumentExtractor() {
   };
 
   const addFieldItem = () => {
-    setFields(prev => [...prev, { key: '', label: '新增字段', desc: '', example: '', isAdvancedOpen: false }]);
+    setFields(prev => [...prev, { key: '', label: '', desc: '', example: '', isAdvancedOpen: false }]);
   };
 
   // ── Step 3: LLM Extraction & Safety Guard ──
@@ -1237,7 +1237,7 @@ export default function DocumentExtractor() {
                   }`}
               >
                 <span className={`w-2 h-2 rounded-full ${llmConnected ? 'bg-green-600 shadow-[0_0_6px_#16a34a]' : 'bg-stone-gray'}`} />
-                <span>{llmConnected ? `🤖 连接: ${llmConfig.model} (${llmSupportVision ? 'Vision' : 'Text'})` : '🤖 大语言模型未连接'}</span>
+                <span>{llmConnected ? `🤖 模型已连接: ${llmConfig.provider} ${llmConfig.model} (${llmSupportVision ? '多模态模型' : '纯文本模型'})` : '🤖 大语言模型未连接'}</span>
               </button>
 
               <AnimatePresence>
@@ -1667,10 +1667,10 @@ export default function DocumentExtractor() {
                         value={customPrompt}
                         onChange={(e) => setCustomPrompt(e.target.value)}
                         className="bg-warm-sand/30 border border-border-warm rounded-lg p-4 text-xs outline-none focus:bg-white focus:border-terracotta transition w-full min-h-[300px] font-sans"
-                        placeholder="请输入大模型系统提示词..."
+                        placeholder="请输入大模型解析提示词..."
                       />
                       <span className="text-xs text-stone-gray leading-normal">
-                        * 提示词在投喂给大模型时，会自动追加系统最高级别防注入审查语句与结构化键名英文属性规范约束。
+                        * 提示词在输入给大模型之前，会自动追加防注入审查语句规范约束。
                       </span>
                     </div>
                   </section>
@@ -1728,10 +1728,10 @@ export default function DocumentExtractor() {
                     <div className="w-full bg-warm-sand/40 h-2 rounded-full overflow-hidden border border-border-warm/30">
                       <div
                         className={`h-full transition-all duration-500 ease-out ${extractionError
-                            ? 'bg-error-crimson'
-                            : isExtracting
-                              ? 'bg-terracotta'
-                              : 'bg-green-600'
+                          ? 'bg-error-crimson'
+                          : isExtracting
+                            ? 'bg-terracotta'
+                            : 'bg-green-600'
                           }`}
                         style={{ width: `${extractingProgress.percent}%` }}
                       />
@@ -2016,7 +2016,7 @@ export default function DocumentExtractor() {
                   }
                   setActiveStep(2);
                 }}
-                className="bg-terracotta hover:bg-terracotta-hover text-ivory text-xs font-semibold px-6 py-2.5 rounded transition flex items-center gap-1.5 shadow-sm animate-pulse hover:animate-none"
+                className="bg-terracotta hover:bg-terracotta-hover text-ivory text-xs font-semibold px-8 py-2.5 rounded transition flex items-center gap-1.5 shadow-sm animate-pulse hover:animate-none"
               >
                 <span>下一步：配置字段</span>
                 <ArrowRight size={14} />
@@ -2027,7 +2027,7 @@ export default function DocumentExtractor() {
               <button
                 onClick={startExtraction}
                 disabled={isExtracting || filesQueue.filter(f => f.status === 'done').length === 0 || !isTableConnected}
-                className="bg-terracotta hover:bg-terracotta-hover text-ivory text-xs font-semibold px-8 py-2.5 rounded transition flex items-center gap-1.5 shadow-sm disabled:opacity-40"
+                className="bg-terracotta hover:bg-terracotta-hover text-ivory text-xs font-semibold px-8 py-2.5 rounded transition flex items-center gap-1.5 shadow-sm animate-pulse disabled:opacity-40"
               >
                 {isExtracting ? (
                   <>
@@ -2036,7 +2036,8 @@ export default function DocumentExtractor() {
                   </>
                 ) : (
                   <>
-                    <span>🪄 开始提取并解析</span>
+                    <span>下一步：开始解析</span>
+                    <ArrowRight size={14} />
                   </>
                 )}
               </button>
