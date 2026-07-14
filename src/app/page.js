@@ -1547,7 +1547,7 @@ export default function DocumentExtractor() {
                               href="https://365.kdocs.cn/3rd/open/developer/home"
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-[10px] text-terracotta hover:underline flex items-center gap-0.5 font-semibold"
+                              className="text-[12px] text-terracotta hover:underline flex items-center gap-0.5 font-semibold"
                             >
                               <span>WPS开放平台应用配置</span>
                               <ExternalLink size={9} />
@@ -1557,13 +1557,13 @@ export default function DocumentExtractor() {
                               href="https://open.feishu.cn/app?lang=zh-CN"
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-[10px] text-terracotta hover:underline flex items-center gap-0.5 font-semibold"
+                              className="text-[12px] text-terracotta hover:underline flex items-center gap-0.5 font-semibold"
                             >
                               <span>飞书开放平台应用配置</span>
                               <ExternalLink size={9} />
                             </a>
                           )}
-                          <p className="text-[10px] text-stone-gray leading-tight">
+                          <p className="text-[12px] text-stone-gray leading-tight">
                             💡 提示：文档写入时显示身份为应用或应用所有者
                           </p>
                         </div>
