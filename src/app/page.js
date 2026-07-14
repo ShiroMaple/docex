@@ -2082,14 +2082,26 @@ export default function DocumentExtractor() {
                         <Sparkles size={16} className="text-terracotta" />
                         AI 提示词微调设置
                       </h3>
-                      <button
-                        onClick={optimizePrompt}
-                        disabled={isOptimizingPrompt || !llmConnected}
-                        className="text-xs font-semibold text-terracotta hover:text-terracotta-hover border border-terracotta/30 bg-terracotta/[0.02] px-3 py-1 rounded transition flex items-center gap-1 disabled:opacity-40"
-                      >
-                        {isOptimizingPrompt ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
-                        <span>AI 优化</span>
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            if (confirm('是否将系统提示词恢复为默认值？')) {
+                              setCustomPrompt(DEFAULT_SYSTEM_PROMPT);
+                            }
+                          }}
+                          className="text-xs font-semibold text-olive-gray hover:text-near-black bg-warm-sand/50 hover:bg-warm-sand px-3 py-1 rounded transition border border-border-warm"
+                        >
+                          恢复默认
+                        </button>
+                        <button
+                          onClick={optimizePrompt}
+                          disabled={isOptimizingPrompt || !llmConnected}
+                          className="text-xs font-semibold text-terracotta hover:text-terracotta-hover border border-terracotta/30 bg-terracotta/[0.02] px-3 py-1 rounded transition flex items-center gap-1 disabled:opacity-40"
+                        >
+                          {isOptimizingPrompt ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
+                          <span>AI 优化</span>
+                        </button>
+                      </div>
                     </div>
 
                     <div className="flex flex-col gap-3">
