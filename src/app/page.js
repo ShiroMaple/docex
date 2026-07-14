@@ -21,8 +21,10 @@ import {
   FileCheck,
   X,
   ArrowRight,
-  ArrowLeft
+  ArrowLeft,
+  Download
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 const DEFAULT_SYSTEM_PROMPT = `你是一个专业的安全检查报告解析专家。
 你的任务是：根据输入的报告文档内容（包含文字参考层、表格结构以及视觉截图），提取出所有的安全隐患（问题）。
@@ -69,7 +71,7 @@ export default function DocumentExtractor() {
   const [isTableConnected, setIsTableConnected] = useState(false);
   const [tableName, setTableName] = useState('');
   const [schemaFields, setSchemaFields] = useState([]); // Array of { id, name, type, isReadOnly }
-  const [autoNumber, setAutoNumber] = useState(false);
+  const [autoNumber, setAutoNumber] = useState(true);
   const [isConnectingTable, setIsConnectingTable] = useState(false);
   const [tableConnectionError, setTableConnectionError] = useState('');
 
@@ -895,6 +897,35 @@ export default function DocumentExtractor() {
           currentFile: '所有文档处理完毕'
         };
       });
+    }
+  };
+
+  const exportToExcel = () => {
+    if (extractedIssues.length === 0) {
+      alert('没有可导出的解析结果！');
+      return;
+    }
+
+    try {
+      const headers = fields.map(f => f.label || '未命名列');
+      const dataToExport = extractedIssues.map((issue, idx) => {
+        const row = { '序号': idx + 1 };
+        fields.forEach((f, colIdx) => {
+          const key = f.key || `field_${colIdx + 1}`;
+          row[f.label || `列_${colIdx + 1}`] = issue[key] || '';
+        });
+        return row;
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "解析结果");
+
+      XLSX.writeFile(workbook, `DocEx_解析结果_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      showToast('🎉 Excel 导出成功！');
+    } catch (err) {
+      console.error('导出 Excel 失败:', err);
+      alert(`导出 Excel 失败: ${err.message}`);
     }
   };
 
@@ -1924,7 +1955,7 @@ export default function DocumentExtractor() {
 
                     {/* Action buttons */}
                     <div className="flex justify-between items-center gap-4">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         {extractedIssues.length > 0 && (
                           <span className="text-xs bg-warm-sand/80 text-olive-gray font-semibold px-3 py-2 rounded border border-border-cream mr-1">
                             共 {extractedIssues.length} 条记录
@@ -1937,6 +1968,16 @@ export default function DocumentExtractor() {
                           <Plus size={12} />
                           <span>添加空白行记录</span>
                         </button>
+
+                        {extractedIssues.length > 0 && (
+                          <button
+                            onClick={exportToExcel}
+                            className="border border-stone-gray hover:border-near-black text-olive-gray hover:text-near-black px-4 py-2 rounded text-xs font-semibold flex items-center gap-1 transition bg-white shadow-sm"
+                          >
+                            <Download size={12} />
+                            <span>导出为 Excel</span>
+                          </button>
+                        )}
 
                         {rawLlmResponse && (
                           <button
