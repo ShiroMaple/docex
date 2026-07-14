@@ -1845,10 +1845,9 @@ export default function DocumentExtractor() {
                               </div>
                             ) : (
                               <div className="w-full flex flex-col items-center flex-shrink-0 min-h-[22px]">
-                                <span 
-                                  className={`text-xs font-bold flex items-center gap-0.5 cursor-help ${
-                                    item.status === 'done' ? 'text-green-600' : 'text-error-crimson'
-                                  }`}
+                                <span
+                                  className={`text-xs font-bold flex items-center gap-0.5 cursor-help ${item.status === 'done' ? 'text-green-600' : 'text-error-crimson'
+                                    }`}
                                   title={item.status === 'failed' ? `失败详情: ${item.error || '解析失败'}` : undefined}
                                 >
                                   {item.status === 'done' ? (
@@ -1861,7 +1860,7 @@ export default function DocumentExtractor() {
                                   )}
                                 </span>
                                 {item.status === 'failed' && (
-                                  <span 
+                                  <span
                                     className="text-[9px] text-error-crimson truncate w-full px-1 text-center font-medium block max-w-[80px]"
                                     title={item.error}
                                   >
@@ -2287,7 +2286,7 @@ export default function DocumentExtractor() {
                           onClick={() => setIsLlmModalOpen(true)}
                           className="bg-red-100/50 hover:bg-red-100 text-error-crimson border border-red-200/50 px-3 py-1.5 rounded font-semibold flex items-center gap-1.5 transition"
                         >
-                          <span>🔍 查看大模型原始 JSON 输出</span>
+                          <span>🔍 查看AI原始 JSON 输出</span>
                         </button>
                       </div>
                     )}
@@ -2301,7 +2300,7 @@ export default function DocumentExtractor() {
                     {tokenUsage && (
                       <div className="flex items-center gap-6 bg-warm-sand/20 border border-border-cream rounded-lg p-4 text-xs font-semibold text-olive-gray">
                         <div className="flex items-center gap-2">
-                          <span>📊 大模型开销统计:</span>
+                          <span>📊 AI模型开销统计:</span>
                         </div>
                         <div>
                           输入 Token <span className="text-near-black font-bold">{tokenUsage.promptTokens?.toLocaleString()}</span>
@@ -2489,7 +2488,7 @@ export default function DocumentExtractor() {
                   }
                   setActiveStep(2);
                 }}
-                className="bg-terracotta hover:bg-terracotta-hover text-ivory text-xs font-semibold px-8 py-2.5 rounded transition flex items-center gap-1.5 shadow-sm animate-pulse hover:animate-none"
+                className="bg-terracotta hover:bg-terracotta-hover text-ivory text-xs font-semibold px-8 py-2.5 rounded transition flex items-center gap-1.5 shadow-sm hover:animate-none"
               >
                 <span>下一步：配置字段</span>
                 <ArrowRight size={14} />
@@ -2500,7 +2499,7 @@ export default function DocumentExtractor() {
               <button
                 onClick={startExtraction}
                 disabled={isExtracting || filesQueue.filter(f => f.status === 'done').length === 0 || !isTableConnected}
-                className="bg-terracotta hover:bg-terracotta-hover text-ivory text-xs font-semibold px-8 py-2.5 rounded transition flex items-center gap-1.5 shadow-sm animate-pulse disabled:opacity-40"
+                className="bg-terracotta hover:bg-terracotta-hover text-ivory text-xs font-semibold px-8 py-2.5 rounded transition flex items-center gap-1.5 shadow-sm disabled:opacity-40"
               >
                 {isExtracting ? (
                   <>
