@@ -11,6 +11,9 @@ importers:
       '@google/genai':
         specifier: ^2.10.0
         version: 2.11.0
+      '@napi-rs/canvas':
+        specifier: ^1.0.2
+        version: 1.0.2
       axios:
         specifier: ^1.18.1
         version: 1.18.1

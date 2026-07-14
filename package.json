@@ -6,7 +6,7 @@
   "main": "src/index.js",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/copy-worker.js && next build",
     "start": "next start"
   },
   "keywords": [
@@ -21,6 +21,7 @@
   "license": "ISC",
   "dependencies": {
     "@google/genai": "^2.10.0",
+    "@napi-rs/canvas": "^1.0.2",
     "axios": "^1.18.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",

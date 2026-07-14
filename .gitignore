@@ -16,3 +16,6 @@ data/output/*
 !data/output/.gitkeep
 data/input/*
 !data/input/.gitkeep
+
+# PDFJS worker build artifact
+public/pdf.worker.mjs

@@ -1,14 +1,28 @@
+import * as canvas from '@napi-rs/canvas';
 import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath, pathToFileURL } from 'url';
-import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { pdfToPng } from 'pdf-to-png-converter';
 import mammoth from 'mammoth';
 import { getFileRecord, saveFileRecord } from './db.js';
 
-const workerPath = path.resolve(process.cwd(), 'node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs');
-pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).toString();
+// Polyfill globals needed by pdfjs-dist in Node environment using @napi-rs/canvas
+global.Canvas = canvas.Canvas;
+global.Image = canvas.Image;
+global.ImageData = canvas.ImageData;
+global.Path2D = canvas.Path2D;
+global.DOMMatrix = canvas.DOMMatrix;
+
+let pdfjs = null;
+async function getPdfJs() {
+  if (!pdfjs) {
+    pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const workerPath = path.resolve(process.cwd(), 'public/pdf.worker.mjs');
+    pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).toString();
+  }
+  return pdfjs;
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -79,8 +93,9 @@ async function processPdf(filePath, outputDir, md5) {
   // 1. 尝试提取文字层
   let text = '';
   try {
+    const pdfjsInstance = await getPdfJs();
     const dataBuffer = await fs.readFile(filePath);
-    const loadingTask = pdfjs.getDocument({
+    const loadingTask = pdfjsInstance.getDocument({
       data: new Uint8Array(dataBuffer),
       useSystemFonts: true
     });
