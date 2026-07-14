@@ -176,14 +176,14 @@ export default function DocumentExtractor() {
       url: 'https://365.kdocs.cn/l/cbGbLglUXASe',
       isDefault: true
     };
-    
+
     const defaultFeishuConf = {
       id: 'feishu_test',
       name: '飞书测试配置',
       platform: 'feishu',
       appId: '',
       appSecret: '',
-      url: '',
+      url: 'https://dcnxzjtyczo8.feishu.cn/wiki/FJvNwbnCxi6ymuky8bTcRTu2nS6?table=tbla78TDmVdUqIyt&view=vewOBDYdZ3',
       isDefault: true
     };
 
@@ -276,8 +276,8 @@ export default function DocumentExtractor() {
 
   useEffect(() => {
     if (feishuUrl) {
-      const tokenMatch = feishuUrl.match(/\/base\/([a-zA-Z0-9]+)/);
-      setFeishuAppToken(tokenMatch ? tokenMatch[1] : '');
+      const tokenMatch = feishuUrl.match(/\/(base|wiki)\/([a-zA-Z0-9_-]+)/);
+      setFeishuAppToken(tokenMatch ? tokenMatch[2] : '');
 
       try {
         const urlObj = new URL(feishuUrl);
@@ -1424,7 +1424,7 @@ export default function DocumentExtractor() {
                   }`}
               >
                 <span className={`w-2 h-2 rounded-full ${isTableConnected ? 'bg-green-600 shadow-[0_0_6px_#16a34a]' : 'bg-stone-gray'}`} />
-                <span>{isTableConnected ? `📊 对齐: ${tableName}` : '📊 未连接目标表'}</span>
+                <span>{isTableConnected ? `📊 多维表格已连接: ${platform} ${tableName}` : '📊 多维表格未连接'}</span>
               </button>
 
               <AnimatePresence>
@@ -1435,7 +1435,7 @@ export default function DocumentExtractor() {
                     exit={{ opacity: 0, y: 10 }}
                     className="absolute right-0 mt-2 w-80 bg-ivory border border-warm-sand rounded-lg p-5 shadow-lg z-50 text-near-black"
                   >
-                    <h4 className="font-serif font-medium text-sm border-b border-border-cream pb-2 mb-3">多维表格对齐网关</h4>
+                    <h4 className="font-serif font-medium text-sm border-b border-border-cream pb-2 mb-3">多维表格网关</h4>
 
                     <div className="flex flex-col gap-3 mb-4">
                       {/* Table config selector */}

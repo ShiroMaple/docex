@@ -25,6 +25,32 @@ async function getLarkTenantToken(appId = null, appSecret = null) {
   return response.data.tenant_access_token;
 }
 
+/**
+ * 解析飞书 Wiki Token 为实际的多维表格 App Token
+ */
+async function resolveFeishuAppToken(token, appId = null, appSecret = null) {
+  if (!token) return token;
+  if (token.startsWith('wik')) {
+    const tenantToken = await getLarkTenantToken(appId, appSecret);
+    const url = `https://open.feishu.cn/open-apis/wiki/v2/spaces/get_node?token=${token}`;
+    const response = await axios.get(url, {
+      headers: {
+        'Authorization': `Bearer ${tenantToken}`,
+        'Content-Type': 'application/json; charset=utf-8'
+      }
+    });
+    if (response.data.code !== 0) {
+      throw new Error(`解析知识库多维表格失败: ${response.data.msg}`);
+    }
+    const node = response.data.data?.node;
+    if (!node || node.obj_type !== 'bitable') {
+      throw new Error('指定的知识库文档不是多维表格类型');
+    }
+    return node.obj_token;
+  }
+  return token;
+}
+
 const FIELD_KEYWORDS = {
   projectName:           ['项目', '工程', '项目名', '工程名'],
   issueType:             ['类型', '隐患类型', '问题类型', '安全类型', '类别'],
@@ -57,8 +83,9 @@ function buildAutoFieldMapping(feishuFields) {
  * @returns {Promise<object>} { name: string, fields: Array<{id, name, type, isReadOnly}> }
  */
 export async function getFeishuSchema(appToken, tableId, appId = null, appSecret = null) {
+  const resolvedAppToken = await resolveFeishuAppToken(appToken, appId, appSecret);
   const token = await getLarkTenantToken(appId, appSecret);
-  const url = `https://open.feishu.cn/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/fields`;
+  const url = `https://open.feishu.cn/open-apis/bitable/v1/apps/${resolvedAppToken}/tables/${tableId}/fields`;
   const response = await axios.get(url, {
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -96,8 +123,9 @@ export async function getFeishuSchema(appToken, tableId, appId = null, appSecret
 export async function appendToFeishu(issues, appToken, tableId, fieldMapping = null, appId = null, appSecret = null) {
   if (!issues || issues.length === 0) return;
   
+  const resolvedAppToken = await resolveFeishuAppToken(appToken, appId, appSecret);
   const tenantToken = await getLarkTenantToken(appId, appSecret);
-  const url = `https://open.feishu.cn/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/records/batch_create`;
+  const url = `https://open.feishu.cn/open-apis/bitable/v1/apps/${resolvedAppToken}/tables/${tableId}/records/batch_create`;
   
   // 获取字段结构
   const schema = await getFeishuSchema(appToken, tableId, appId, appSecret);
@@ -184,8 +212,9 @@ export async function appendToTable(issues) {
  * 在飞书多维表格中新增一列（文本类型）
  */
 export async function createFeishuField(appToken, tableId, fieldName, appId = null, appSecret = null) {
+  const resolvedAppToken = await resolveFeishuAppToken(appToken, appId, appSecret);
   const token = await getLarkTenantToken(appId, appSecret);
-  const url = `https://open.feishu.cn/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/fields`;
+  const url = `https://open.feishu.cn/open-apis/bitable/v1/apps/${resolvedAppToken}/tables/${tableId}/fields`;
   const response = await axios.post(url, {
     field_name: fieldName,
     type: 1 // 1 = 文本
@@ -206,8 +235,9 @@ export async function createFeishuField(appToken, tableId, fieldName, appId = nu
  * 获取飞书表格最后一行的序号最大值
  */
 export async function getFeishuLastSerialNumber(appToken, tableId, serialFieldName, appId = null, appSecret = null) {
+  const resolvedAppToken = await resolveFeishuAppToken(appToken, appId, appSecret);
   const token = await getLarkTenantToken(appId, appSecret);
-  const url = `https://open.feishu.cn/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/records`;
+  const url = `https://open.feishu.cn/open-apis/bitable/v1/apps/${resolvedAppToken}/tables/${tableId}/records`;
   
   try {
     const response = await axios.get(url, {
