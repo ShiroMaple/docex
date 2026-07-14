@@ -1408,7 +1408,7 @@ export default function DocumentExtractor() {
           <div className="flex items-center gap-3">
             <span className="text-xl">📚</span>
             <span className="font-serif font-bold text-lg leading-none tracking-tight">DocEx</span>
-            <span className="text-x font-bold tracking-wider text-olive-gray bg-warm-sand px-2 py-0.5 rounded-full uppercase">智能结构化提取文档数据</span>
+            <span className="text-x font-bold tracking-wider text-olive-black bg-warm-sand px-2 py-0.5 rounded-full uppercase">智能结构化提取文档数据</span>
           </div>
 
           <div className="flex items-center gap-3">
