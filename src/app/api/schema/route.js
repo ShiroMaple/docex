@@ -10,12 +10,14 @@ export async function GET(request) {
   try {
     if (provider === 'wps') {
       const fileId = searchParams.get('fileId')?.trim();
+      const appId = searchParams.get('appId')?.trim() || null;
+      const appSecret = searchParams.get('appSecret')?.trim() || null;
       if (!fileId) {
         return NextResponse.json({ error: '缺少 fileId 参数' }, { status: 400 });
       }
       
       wpsService.setFileId(fileId);
-      const sheet = await wpsService.getSchema(null, force);
+      const sheet = await wpsService.getSchema(null, force, appId, appSecret);
       const fields = sheet.fields.map(f => ({
         id: f.id,
         name: f.name,
@@ -27,11 +29,13 @@ export async function GET(request) {
     } else if (provider === 'feishu') {
       const appToken = searchParams.get('appToken')?.trim();
       const tableId = searchParams.get('tableId')?.trim();
+      const appId = searchParams.get('appId')?.trim() || null;
+      const appSecret = searchParams.get('appSecret')?.trim() || null;
       if (!appToken || !tableId) {
         return NextResponse.json({ error: '缺少 appToken 或 tableId 参数' }, { status: 400 });
       }
       
-      const sheet = await getFeishuSchema(appToken, tableId);
+      const sheet = await getFeishuSchema(appToken, tableId, appId, appSecret);
       return NextResponse.json({ sheetName: sheet.name, fields: sheet.fields });
 
     } else {

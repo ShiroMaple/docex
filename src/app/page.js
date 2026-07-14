@@ -75,6 +75,12 @@ export default function DocumentExtractor() {
   const [isConnectingTable, setIsConnectingTable] = useState(false);
   const [tableConnectionError, setTableConnectionError] = useState('');
 
+  const [tableConfigList, setTableConfigList] = useState([]);
+  const [selectedTableConfigId, setSelectedTableConfigId] = useState('wps_test');
+  const [customTableConfigName, setCustomTableConfigName] = useState('');
+  const [tableAppId, setTableAppId] = useState('');
+  const [tableAppSecret, setTableAppSecret] = useState('');
+
   // ── Popover: LLM Connection ──
   const [llmConfig, setLlmConfig] = useState({
     provider: 'XiaoMi',
@@ -160,11 +166,62 @@ export default function DocumentExtractor() {
     setSelectedConfigId(activeConfig.id);
     setCustomConfigName(activeConfig.isDefault ? '' : activeConfig.name);
 
-    // Load URL presets
-    const cachedWpsUrl = localStorage.getItem('docex_wps_url');
-    if (cachedWpsUrl) setWpsUrl(cachedWpsUrl);
-    const cachedFeishuUrl = localStorage.getItem('docex_feishu_url');
-    if (cachedFeishuUrl) setFeishuUrl(cachedFeishuUrl);
+    // Load Table Configurations
+    const defaultWpsConf = {
+      id: 'wps_test',
+      name: 'WPS测试配置',
+      platform: 'wps',
+      appId: '',
+      appSecret: '',
+      url: 'https://365.kdocs.cn/l/cbGbLglUXASe',
+      isDefault: true
+    };
+    
+    const defaultFeishuConf = {
+      id: 'feishu_test',
+      name: '飞书测试配置',
+      platform: 'feishu',
+      appId: '',
+      appSecret: '',
+      url: '',
+      isDefault: true
+    };
+
+    const cachedTableList = localStorage.getItem('docex_table_config_list');
+    let loadedTableList = [];
+    if (cachedTableList) {
+      try {
+        loadedTableList = JSON.parse(cachedTableList);
+      } catch { }
+    }
+
+    const hasWpsDefault = loadedTableList.some(c => c.id === 'wps_test');
+    const hasFeishuDefault = loadedTableList.some(c => c.id === 'feishu_test');
+
+    if (!hasWpsDefault) loadedTableList.push(defaultWpsConf);
+    if (!hasFeishuDefault) loadedTableList.push(defaultFeishuConf);
+
+    loadedTableList = loadedTableList.map(c => {
+      if (c.id === 'wps_test') return { ...defaultWpsConf, url: c.url || defaultWpsConf.url };
+      if (c.id === 'feishu_test') return { ...defaultFeishuConf, url: c.url || defaultFeishuConf.url };
+      return c;
+    });
+
+    setTableConfigList(loadedTableList);
+
+    const activeTableId = localStorage.getItem('docex_active_table_config_id') || 'wps_test';
+    const activeTableConfig = loadedTableList.find(c => c.id === activeTableId) || defaultWpsConf;
+
+    setPlatform(activeTableConfig.platform || 'wps');
+    if (activeTableConfig.platform === 'wps') {
+      setWpsUrl(activeTableConfig.url || '');
+    } else {
+      setFeishuUrl(activeTableConfig.url || '');
+    }
+    setTableAppId(activeTableConfig.appId || '');
+    setTableAppSecret(activeTableConfig.appSecret || '');
+    setSelectedTableConfigId(activeTableConfig.id);
+    setCustomTableConfigName(activeTableConfig.isDefault ? '' : activeTableConfig.name);
 
     fetchHistoryFiles();
 
@@ -274,6 +331,9 @@ export default function DocumentExtractor() {
       query += `&appToken=${feishuAppToken}&tableId=${feishuTableId}`;
     }
 
+    if (tableAppId) query += `&appId=${encodeURIComponent(tableAppId)}`;
+    if (tableAppSecret) query += `&appSecret=${encodeURIComponent(tableAppSecret)}`;
+
     try {
       const res = await fetch(`/api/schema?${query}`);
       const data = await res.json();
@@ -284,7 +344,6 @@ export default function DocumentExtractor() {
       setTableName(data.sheetName || '数据表');
       setIsTableConnected(true);
 
-      // Perform initial fuzzy mapping for schema matching
       const initMappings = {};
       fields.forEach(f => {
         const match = fuzzyMatchField(f.label, data.fields);
@@ -293,7 +352,6 @@ export default function DocumentExtractor() {
         }
       });
 
-      // Load saved mappings from storage
       const targetId = platform === 'wps' ? wpsFileId : `${feishuAppToken}_${feishuTableId}`;
       const saved = localStorage.getItem(`docex_mapping_${targetId}`);
       if (saved) {
@@ -310,12 +368,96 @@ export default function DocumentExtractor() {
 
       setFieldMappings(initMappings);
 
+      let updatedList = [...tableConfigList];
+      let savedId = selectedTableConfigId;
+      const currentUrl = platform === 'wps' ? wpsUrl : feishuUrl;
+
+      if (selectedTableConfigId === 'new') {
+        let nameToUse = customTableConfigName.trim();
+        if (!nameToUse) {
+          const customConfigs = tableConfigList.filter(c => !c.isDefault);
+          nameToUse = `自定义表格配置 ${customConfigs.length + 1}`;
+        }
+        const newId = `table_${Date.now()}`;
+        const newConfig = {
+          id: newId,
+          name: nameToUse,
+          platform,
+          appId: tableAppId,
+          appSecret: tableAppSecret,
+          url: currentUrl,
+          isDefault: false
+        };
+        updatedList = [...tableConfigList, newConfig];
+        savedId = newId;
+        setSelectedTableConfigId(newId);
+        setCustomTableConfigName(nameToUse);
+      } else {
+        updatedList = tableConfigList.map(c => {
+          if (c.id === selectedTableConfigId) {
+            return {
+              ...c,
+              platform,
+              appId: tableAppId,
+              appSecret: tableAppSecret,
+              url: currentUrl,
+              name: c.isDefault ? c.name : (customTableConfigName.trim() || c.name)
+            };
+          }
+          return c;
+        });
+      }
+
+      setTableConfigList(updatedList);
+      localStorage.setItem('docex_table_config_list', JSON.stringify(updatedList));
+      localStorage.setItem('docex_active_table_config_id', savedId);
+
     } catch (err) {
       setTableConnectionError(err.message);
     } finally {
       setIsConnectingTable(false);
       setIsSchemaLoading(false);
     }
+  };
+
+  const handleTableConfigChange = (id) => {
+    setSelectedTableConfigId(id);
+    if (id === 'new') {
+      setPlatform('wps');
+      setWpsUrl('');
+      setFeishuUrl('');
+      setTableAppId('');
+      setTableAppSecret('');
+      setCustomTableConfigName('');
+      resetTableAlignment();
+    } else {
+      const selected = tableConfigList.find(c => c.id === id);
+      if (selected) {
+        setPlatform(selected.platform || 'wps');
+        if (selected.platform === 'wps') {
+          setWpsUrl(selected.url || '');
+        } else {
+          setFeishuUrl(selected.url || '');
+        }
+        setTableAppId(selected.appId || '');
+        setTableAppSecret(selected.appSecret || '');
+        setCustomTableConfigName(selected.isDefault ? '' : selected.name);
+        resetTableAlignment();
+      }
+    }
+  };
+
+  const handleDeleteTableConfig = (id) => {
+    if (id === 'wps_test' || id === 'feishu_test') return;
+    if (!confirm('确定要删除此表格配置吗？')) return;
+
+    const updatedList = tableConfigList.filter(c => c.id !== id);
+    setTableConfigList(updatedList);
+    localStorage.setItem('docex_table_config_list', JSON.stringify(updatedList));
+
+    setSelectedTableConfigId('wps_test');
+    handleTableConfigChange('wps_test');
+    showToast('🗑️ 表格配置删除成功，已恢复为默认测试配置');
   };
 
   const fuzzyMatchField = (label, schemaFieldsList) => {
@@ -1129,7 +1271,9 @@ export default function DocumentExtractor() {
           tableId: feishuTableId,
           issues: extractedIssues,
           fieldMapping: resolves,
-          autoNumber
+          autoNumber,
+          appId: tableAppId,
+          appSecret: tableAppSecret
         })
       });
       const data = await res.json();
@@ -1293,50 +1437,114 @@ export default function DocumentExtractor() {
                   >
                     <h4 className="font-serif font-medium text-sm border-b border-border-cream pb-2 mb-3">多维表格对齐网关</h4>
 
-                    <div className="flex gap-2 mb-4">
-                      <button
-                        onClick={() => setPlatform('wps')}
-                        className={`flex-1 py-1.5 rounded text-xs font-semibold border transition ${platform === 'wps'
-                          ? 'bg-warm-sand border-stone-gray text-near-black'
-                          : 'bg-ivory border-border-cream text-olive-gray hover:bg-warm-sand/50'
-                          }`}
-                      >
-                        WPS 表格
-                      </button>
-                      <button
-                        onClick={() => setPlatform('feishu')}
-                        className={`flex-1 py-1.5 rounded text-xs font-semibold border transition ${platform === 'feishu'
-                          ? 'bg-warm-sand border-stone-gray text-near-black'
-                          : 'bg-ivory border-border-cream text-olive-gray hover:bg-warm-sand/50'
-                          }`}
-                      >
-                        飞书表格
-                      </button>
-                    </div>
+                    <div className="flex flex-col gap-3 mb-4">
+                      {/* Table config selector */}
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-olive-gray uppercase tracking-wider">选择表格配置</label>
+                        <div className="flex gap-1.5">
+                          <select
+                            value={selectedTableConfigId}
+                            onChange={(e) => handleTableConfigChange(e.target.value)}
+                            className="flex-1 bg-warm-sand border border-border-warm rounded px-2 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue transition text-near-black"
+                          >
+                            {tableConfigList.map(c => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                            <option value="new">➕ 新建自定义配置</option>
+                          </select>
+                          {selectedTableConfigId !== 'wps_test' && selectedTableConfigId !== 'feishu_test' && selectedTableConfigId !== 'new' && (
+                            <button
+                              onClick={() => handleDeleteTableConfig(selectedTableConfigId)}
+                              className="p-1.5 rounded border border-border-cream bg-white hover:bg-red-50 text-stone-gray hover:text-error-crimson transition"
+                              title="删除该配置"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
 
-                    {platform === 'wps' ? (
-                      <div className="flex flex-col gap-1 mb-4">
-                        <label className="text-xs font-bold text-olive-gray uppercase tracking-wider">WPS 协作分享链接</label>
+                      {selectedTableConfigId !== 'wps_test' && selectedTableConfigId !== 'feishu_test' && (
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs font-bold text-olive-gray uppercase tracking-wider">配置命名</label>
+                          <input
+                            type="text"
+                            value={customTableConfigName}
+                            onChange={(e) => setCustomTableConfigName(e.target.value)}
+                            className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue transition w-full"
+                            placeholder="自定义表格配置名称"
+                          />
+                        </div>
+                      )}
+
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setPlatform('wps')}
+                          className={`flex-1 py-1.5 rounded text-xs font-semibold border transition ${platform === 'wps'
+                            ? 'bg-warm-sand border-stone-gray text-near-black'
+                            : 'bg-ivory border-border-cream text-olive-gray hover:bg-warm-sand/50'
+                            }`}
+                        >
+                          WPS 表格
+                        </button>
+                        <button
+                          onClick={() => setPlatform('feishu')}
+                          className={`flex-1 py-1.5 rounded text-xs font-semibold border transition ${platform === 'feishu'
+                            ? 'bg-warm-sand border-stone-gray text-near-black'
+                            : 'bg-ivory border-border-cream text-olive-gray hover:bg-warm-sand/50'
+                            }`}
+                        >
+                          飞书表格
+                        </button>
+                      </div>
+
+                      {platform === 'wps' ? (
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs font-bold text-olive-gray uppercase tracking-wider">WPS 协作分享链接</label>
+                          <input
+                            type="text"
+                            value={wpsUrl}
+                            onChange={(e) => setWpsUrl(e.target.value)}
+                            placeholder="https://365.kdocs.cn/l/xxx"
+                            className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs font-bold text-olive-gray uppercase tracking-wider">飞书表格分享链接</label>
+                          <input
+                            type="text"
+                            value={feishuUrl}
+                            onChange={(e) => setFeishuUrl(e.target.value)}
+                            placeholder="https://xxx.feishu.cn/base/xxx"
+                            className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full"
+                          />
+                        </div>
+                      )}
+
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-olive-gray uppercase tracking-wider">App ID (可选)</label>
                         <input
                           type="text"
-                          value={wpsUrl}
-                          onChange={(e) => setWpsUrl(e.target.value)}
-                          placeholder="https://365.kdocs.cn/l/xxx"
+                          value={tableAppId}
+                          onChange={(e) => setTableAppId(e.target.value)}
                           className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full"
+                          placeholder="自定凭证 App ID"
                         />
                       </div>
-                    ) : (
-                      <div className="flex flex-col gap-1 mb-4">
-                        <label className="text-xs font-bold text-olive-gray uppercase tracking-wider">飞书表格分享链接</label>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-olive-gray uppercase tracking-wider">App Secret (可选)</label>
                         <input
-                          type="text"
-                          value={feishuUrl}
-                          onChange={(e) => setFeishuUrl(e.target.value)}
-                          placeholder="https://xxx.feishu.cn/base/xxx"
+                          type="password"
+                          value={tableAppSecret}
+                          onChange={(e) => setTableAppSecret(e.target.value)}
                           className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full"
+                          placeholder="自定凭证 App Secret"
                         />
                       </div>
-                    )}
+                    </div>
 
                     <div className="flex items-center justify-between mb-4 border-t border-border-cream pt-3">
                       <div className="flex flex-col">

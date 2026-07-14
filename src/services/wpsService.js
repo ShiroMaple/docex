@@ -17,8 +17,7 @@ class WpsService {
     this.appId = config.wps?.appId;
     this.appSecret = config.wps?.appSecret;
     this.fileId = config.wps?.baseId;
-    this.accessToken = null;
-    this.tokenExpireTime = 0;
+    this._tokenCache = null; // { token, expireTime, appId }
     this._schemaCache = null;
     this._schemaCacheTime = 0;
   }
@@ -46,34 +45,38 @@ class WpsService {
   /**
    * 获取 WPS Access Token（带缓存）
    */
-  async getAccessToken() {
+  async getAccessToken(appId = null, appSecret = null) {
+    const activeAppId = appId || this.appId;
+    const activeAppSecret = appSecret || this.appSecret;
     const now = Date.now();
-    if (this.accessToken && now < this.tokenExpireTime) {
-      return this.accessToken;
+
+    if (this._tokenCache && this._tokenCache.appId === activeAppId && now < this._tokenCache.expireTime) {
+      return this._tokenCache.token;
     }
 
-    if (!this.appId || !this.appSecret) {
+    if (!activeAppId || !activeAppSecret) {
       throw new Error('未配置 WPS_APP_ID 或 WPS_APP_SECRET，无法获取 Access Token');
     }
 
     const params = new URLSearchParams();
     params.append('grant_type', 'client_credentials');
-    params.append('client_id', this.appId);
-    params.append('client_secret', this.appSecret);
+    params.append('client_id', activeAppId);
+    params.append('client_secret', activeAppSecret);
 
     const response = await axios.post('https://openapi.wps.cn/oauth2/token', params, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     });
 
-    this.accessToken = response.data.access_token;
-    this.tokenExpireTime = now + (response.data.expires_in - 300) * 1000;
-    return this.accessToken;
+    const token = response.data.access_token;
+    const expireTime = now + (response.data.expires_in - 300) * 1000;
+    this._tokenCache = { token, expireTime, appId: activeAppId };
+    return token;
   }
 
   /**
    * 获取多维表格 Schema（带 30 秒缓存）
    */
-  async getSchema(sheetName = null, forceRefresh = false) {
+  async getSchema(sheetName = null, forceRefresh = false, appId = null, appSecret = null) {
     const now = Date.now();
     if (forceRefresh) {
       this._schemaCache = null;
@@ -84,7 +87,7 @@ class WpsService {
     }
     if (!this.fileId) throw new Error('未设置 fileId');
 
-    const token = await this.getAccessToken();
+    const token = await this.getAccessToken(appId, appSecret);
     const url = `https://openapi.wps.cn/v7/coop/dbsheet/${this.fileId}/schema`;
     const res = await axios.get(url, {
       headers: { Authorization: `Bearer ${token}` }
@@ -132,12 +135,12 @@ class WpsService {
    * @param {string|null} sheetName 目标表名，null 自动取第一张数据表
    * @param {Object|null} fieldMapping 自定义字段映射 { wpsFieldName: docexKey }，null 时自动推断
    */
-  async appendRecords(issues, sheetName = null, fieldMapping = null) {
+  async appendRecords(issues, sheetName = null, fieldMapping = null, appId = null, appSecret = null) {
     if (!issues || issues.length === 0) return;
     if (!this.fileId) throw new Error('未配置 fileId，无法推送记录');
 
-    const token = await this.getAccessToken();
-    const sheet = await this.getSchema(sheetName);
+    const token = await this.getAccessToken(appId, appSecret);
+    const sheet = await this.getSchema(sheetName, false, appId, appSecret);
 
     // 识别只读的系统字段，确保不尝试向其写入任何值
     const READ_ONLY_TYPES = ['CreatedTime', 'CreatedBy', 'Creator', 'LastModifiedTime', 'LastModifiedBy', 'Modifier'];
@@ -181,9 +184,9 @@ class WpsService {
   /**
    * 在 WPS 多维表格中新增一列（文本类型）
    */
-  async createField(fileId, fieldName) {
-    const token = await this.getAccessToken();
-    const sheet = await this.getSchema();
+  async createField(fileId, fieldName, appId = null, appSecret = null) {
+    const token = await this.getAccessToken(appId, appSecret);
+    const sheet = await this.getSchema(null, false, appId, appSecret);
     const url = `https://openapi.wps.cn/v7/coop/dbsheet/${fileId}/sheets/${sheet.id}/fields/create`;
 
     const response = await axios.post(url, {
@@ -206,9 +209,9 @@ class WpsService {
   /**
    * 获取 WPS 表格最后一行的序号最大值
    */
-  async getWpsLastSerialNumber(fileId, serialFieldName) {
-    const token = await this.getAccessToken();
-    const sheet = await this.getSchema();
+  async getWpsLastSerialNumber(fileId, serialFieldName, appId = null, appSecret = null) {
+    const token = await this.getAccessToken(appId, appSecret);
+    const sheet = await this.getSchema(null, false, appId, appSecret);
     const url = `https://openapi.wps.cn/v7/coop/dbsheet/${fileId}/sheets/${sheet.id}/records`;
     
     try {
@@ -231,7 +234,7 @@ class WpsService {
       }
       return maxVal;
     } catch (e) {
-      console.warn('WPS 获取最后一行序号失败，默认从 0 开始:', e.message);
+      console.warn('WPS 获取最后行业务序列号失败，从 0 开始:', e.message);
       return 0;
     }
   }

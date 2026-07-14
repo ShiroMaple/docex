@@ -4,7 +4,7 @@ import { appendToFeishu, getFeishuSchema, getFeishuLastSerialNumber } from '../.
 
 export async function POST(request) {
   try {
-    const { provider, fileId, appToken, tableId, issues, fieldMapping, autoNumber } = await request.json();
+    const { provider, fileId, appToken, tableId, issues, fieldMapping, autoNumber, appId, appSecret } = await request.json();
 
     if (!issues || issues.length === 0) {
       return NextResponse.json({ error: '没有需要推送的记录' }, { status: 400 });
@@ -22,13 +22,13 @@ export async function POST(request) {
       try {
         if (targetProvider === 'wps' && fileId) {
           wpsService.setFileId(fileId);
-          const sheet = await wpsService.getSchema();
+          const sheet = await wpsService.getSchema(null, false, appId, appSecret);
           const serialField = sheet.fields.find(f => 
             ['序号', 'no', 'no.', 'id', 'index'].includes(f.name.toLowerCase())
           );
           if (serialField) serialFieldName = serialField.name;
         } else if (targetProvider === 'feishu' && appToken && tableId) {
-          const sheet = await getFeishuSchema(appToken, tableId);
+          const sheet = await getFeishuSchema(appToken, tableId, appId, appSecret);
           const serialField = sheet.fields.find(f => 
             ['序号', 'no', 'no.', 'id', 'index'].includes(f.name.toLowerCase())
           );
@@ -43,9 +43,9 @@ export async function POST(request) {
         let lastNum = 0;
         try {
           if (targetProvider === 'wps' && fileId) {
-            lastNum = await wpsService.getWpsLastSerialNumber(fileId, serialFieldName);
+            lastNum = await wpsService.getWpsLastSerialNumber(fileId, serialFieldName, appId, appSecret);
           } else if (targetProvider === 'feishu' && appToken && tableId) {
-            lastNum = await getFeishuLastSerialNumber(appToken, tableId, serialFieldName);
+            lastNum = await getFeishuLastSerialNumber(appToken, tableId, serialFieldName, appId, appSecret);
           }
         } catch (e) {
           console.warn('查询最后一行序号值出错，从0开始自增:', e.message);
@@ -68,14 +68,14 @@ export async function POST(request) {
     if (targetProvider === 'wps') {
       if (!fileId) return NextResponse.json({ error: '缺少 fileId' }, { status: 400 });
       wpsService.setFileId(fileId);
-      const result = await wpsService.appendRecords(modifiedIssues, null, resolvedMapping);
+      const result = await wpsService.appendRecords(modifiedIssues, null, resolvedMapping, appId, appSecret);
       return NextResponse.json({ success: true, insertedCount: issues.length, result });
 
     } else if (targetProvider === 'feishu') {
       if (!appToken || !tableId) {
         return NextResponse.json({ error: '缺少 appToken 或 tableId' }, { status: 400 });
       }
-      const result = await appendToFeishu(modifiedIssues, appToken, tableId, resolvedMapping);
+      const result = await appendToFeishu(modifiedIssues, appToken, tableId, resolvedMapping, appId, appSecret);
       return NextResponse.json({ success: true, insertedCount: issues.length, result });
 
     } else {
