@@ -1052,9 +1052,9 @@ export default function DocumentExtractor() {
     if (activeStep === 3) progressWidth = '100%';
 
     return (
-      <div className="w-[300px] relative select-none">
+      <div className="w-[600px] relative select-none">
         {/* Background connector line */}
-        <div className="absolute top-4 left-4 right-4 h-0.5 bg-warm-sand -translate-y-1/2 z-0">
+        <div className="absolute top-5 left-5 right-5 h-0.5 bg-warm-sand -translate-y-1/2 z-0">
           {/* Active progress connector line */}
           <div
             className="h-full bg-terracotta transition-all duration-500 ease-in-out"
@@ -1063,7 +1063,7 @@ export default function DocumentExtractor() {
         </div>
 
         {/* Circles container */}
-        <div className="relative z-10 flex justify-between items-center h-8">
+        <div className="relative z-10 flex justify-between items-center h-10">
           {steps.map((step) => {
             const isActive = activeStep === step.number;
             const isDone = step.done;
@@ -1082,10 +1082,10 @@ export default function DocumentExtractor() {
                   }
                   setActiveStep(step.number);
                 }}
-                className="flex flex-col items-center justify-center cursor-pointer group w-8 h-8 relative"
+                className="flex flex-col items-center justify-center cursor-pointer group w-10 h-10 relative"
               >
                 <div
-                  className={`w-8 h-8 rounded-full border-2 flex items-center justify-center font-bold text-[10px] transition-all duration-300 ${isDone
+                  className={`w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold text-xs transition-all duration-300 ${isDone
                     ? 'border-green-600 bg-green-50 text-green-700'
                     : isActive
                       ? 'border-terracotta bg-ivory text-terracotta shadow-[0_0_8px_rgba(201,100,66,0.35)]'
@@ -1093,15 +1093,15 @@ export default function DocumentExtractor() {
                     }`}
                 >
                   {isDone ? (
-                    <CheckCircle2 size={11} className="text-green-600" />
+                    <CheckCircle2 size={14} className="text-green-600" />
                   ) : (
                     <span>{step.number}</span>
                   )}
                 </div>
 
-                <div className="absolute top-10 left-1/2 -translate-x-1/2 whitespace-nowrap text-center">
+                <div className="absolute top-12 left-1/2 -translate-x-1/2 whitespace-nowrap text-center">
                   <span
-                    className={`text-[10px] tracking-wider transition-all duration-300 ${isActive
+                    className={`text-xs transition-all duration-300 tracking-wider ${isActive
                       ? 'text-near-black font-bold'
                       : isDone
                         ? 'text-green-700 font-semibold'
@@ -2017,7 +2017,7 @@ export default function DocumentExtractor() {
       </main>
 
       {/* ── Sticky Bottom Action Bar ── */}
-      <div className="sticky bottom-0 left-0 right-0 z-30 border-t border-border-cream bg-[#f5f4ed]/85 backdrop-blur-md pt-3 pb-6 shadow-[0_-4px_12px_rgba(20,20,19,0.03)] mt-12">
+      <div className="sticky bottom-0 left-0 right-0 z-30 border-t border-border-cream bg-[#f5f4ed]/85 backdrop-blur-md pt-5 pb-9 shadow-[0_-4px_12px_rgba(20,20,19,0.03)] mt-12">
         <div className="max-w-[1440px] mx-auto px-6 grid grid-cols-3 items-center">
 
           {/* Left Side Buttons */}
