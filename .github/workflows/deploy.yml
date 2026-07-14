@@ -52,6 +52,7 @@ jobs:
         run: |
           [ -d public ] && cp -r public .next/standalone/public || echo "No public folder found"
           cp -r .next/static .next/standalone/.next/static
+          cp ecosystem.config.js .next/standalone/ecosystem.config.js
           cd .next/standalone
           tar -czf ../../release.tar.gz .
 
