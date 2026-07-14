@@ -1,0 +1,81 @@
+name: Deploy docex to Server
+
+on:
+  push:
+    branches:
+      - main # 当 main 分支有代码推送时触发
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 拉取代码
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 2. 设置 Node.js 环境
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # 3. 安装 pnpm
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      # 4. 设置 pnpm 依赖缓存
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Cache pnpm dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      # 5. 安装依赖并编译打包
+      - name: Install & Build
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      # 6. 整合 Standalone 产物并压缩
+      # 增加了对 public 目录存在性的安全判断，防止空项目报错
+      - name: Package Artifacts
+        run: |
+          [ -d public ] && cp -r public .next/standalone/public || echo "No public folder found"
+          cp -r .next/static .next/standalone/.next/static
+          cd .next/standalone
+          tar -czf ../../release.tar.gz .
+
+      # 7. 将压缩包发送至服务器的 /var/www/docex
+      - name: Copy Files to Server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_KEY }}
+          source: "release.tar.gz"
+          target: "/var/www/docex"
+
+      # 8. 远程解压并通知 PM2 重载
+      - name: Deploy and Restart via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_KEY }}
+          script: |
+            cd /var/www/docex
+            # 解压并覆盖旧文件，随后清理压缩包
+            tar -xzf release.tar.gz --overwrite
+            rm release.tar.gz
+            # 使用 PM2 零停机热重载，如果首次运行则执行 start
+            pm2 reload ecosystem.config.js || pm2 start ecosystem.config.js
