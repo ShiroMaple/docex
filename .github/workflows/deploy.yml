@@ -52,7 +52,7 @@ jobs:
         run: |
           [ -d public ] && cp -r public .next/standalone/public || echo "No public folder found"
           cp -r .next/static .next/standalone/.next/static
-          cp ecosystem.config.js .next/standalone/ecosystem.config.js
+          cp ecosystem.config.cjs .next/standalone/ecosystem.config.cjs
           cd .next/standalone
           tar -czf ../../release.tar.gz .
 
@@ -81,4 +81,4 @@ jobs:
             tar -xzf release.tar.gz --overwrite
             rm release.tar.gz
             # 使用 PM2 零停机热重载，如果首次运行则执行 start
-            pm2 reload ecosystem.config.js || pm2 start ecosystem.config.js
+            pm2 reload ecosystem.config.cjs || pm2 start ecosystem.config.cjs
