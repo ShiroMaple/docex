@@ -1777,7 +1777,7 @@ export default function DocumentExtractor() {
                       onDragOver={handleDrag}
                       onDragLeave={handleDrag}
                       onDrop={handleDrop}
-                      className={`border border-dashed rounded-lg py-12 px-6 flex flex-col items-center justify-center cursor-pointer transition select-none flex-1 min-h-[200px] ${dragActive
+                      className={`border border-dashed rounded-lg py-24 px-6 flex flex-col items-center justify-center cursor-pointer transition select-none flex-1 min-h-[400px] ${dragActive
                         ? 'border-terracotta bg-terracotta/[0.02]'
                         : 'border-stone-gray hover:border-terracotta hover:bg-terracotta/[0.01]'
                         }`}
@@ -1801,7 +1801,7 @@ export default function DocumentExtractor() {
                         <span className="text-xs">暂无待处理文档，请从左侧上传或在下方历史中复用</span>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-4 gap-3 overflow-y-auto max-h-[195px] custom-scrollbar">
+                      <div className="grid grid-cols-4 gap-3 overflow-y-auto max-h-[390px] custom-scrollbar">
                         {filesQueue.map(item => (
                           <div
                             key={item.tempId || item.md5}
