@@ -3,6 +3,7 @@ node_modules/
 .env.local
 .DS_Store
 Thumbs.db
+scratch/
 
 # Next.js Build and Cache
 .next/

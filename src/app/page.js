@@ -1402,7 +1402,7 @@ export default function DocumentExtractor() {
       <header className="sticky top-0 z-40 bg-parchment/85 backdrop-blur-md border-b border-border-cream">
         <div className="max-w-[1440px] mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-xl">📚</span>
+            <img src="/icons/logo_maple.jpg" alt="Logo" className="w-6 h-6 object-cover rounded-md" />
             <span className="font-serif font-bold text-lg leading-none tracking-tight">DocEx</span>
             <span className="text-x font-bold tracking-wider text-olive-black bg-warm-sand px-2 py-0.5 rounded-full uppercase">智能结构化提取文档数据</span>
           </div>
