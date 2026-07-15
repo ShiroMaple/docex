@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import wpsService from '../../../services/wpsService.js';
 import { appendToFeishu, getFeishuSchema, getFeishuLastSerialNumber } from '../../../services/feishuService.js';
+import { withLogging, logger } from '../../../lib/logger.js';
 
-export async function POST(request) {
+async function pushHandler(request) {
   try {
     const { provider, fileId, appToken, tableId, issues, fieldMapping, autoNumber, appId, appSecret } = await request.json();
 
@@ -35,7 +36,11 @@ export async function POST(request) {
           if (serialField) serialFieldName = serialField.name;
         }
       } catch (e) {
-        console.warn('获取自动编号字段失败，跳过自增:', e.message);
+        logger.warn({
+          event: 'GET_SERIAL_FIELD_FAILED',
+          provider: targetProvider,
+          error: e.message
+        }, '获取自动编号字段失败，跳过自增');
       }
 
       // 2. 如果存在“序号”列，获取最新值并自动编号
@@ -48,7 +53,12 @@ export async function POST(request) {
             lastNum = await getFeishuLastSerialNumber(appToken, tableId, serialFieldName, appId, appSecret);
           }
         } catch (e) {
-          console.warn('查询最后一行序号值出错，从0开始自增:', e.message);
+          logger.warn({
+            event: 'GET_LAST_SERIAL_NUM_FAILED',
+            provider: targetProvider,
+            fieldName: serialFieldName,
+            error: e.message
+          }, '查询最后一行序号值出错，从0开始自增');
         }
 
         // 为每行分配新编号并绑定映射
@@ -60,7 +70,11 @@ export async function POST(request) {
 
         // 强行插入列名映射
         resolvedMapping[serialFieldName] = 'autoSerialVal';
-        console.log(`ℹ️ [自动编号] 激活，自动匹配表格列 "${serialFieldName}"，起始编号: ${lastNum + 1}`);
+        logger.info({
+          event: 'AUTO_NUMBER_ACTIVE',
+          fieldName: serialFieldName,
+          startNumber: lastNum + 1
+        }, `ℹ️ [自动编号] 激活，自动匹配表格列 "${serialFieldName}"，起始编号: ${lastNum + 1}`);
       }
     }
 
@@ -83,8 +97,14 @@ export async function POST(request) {
     }
 
   } catch (err) {
-    console.error('❌ 推送数据到多维表格失败:', err);
     const detailMsg = err.response?.data?.msg || err.response?.data?.message || err.message;
+    logger.error({
+      event: 'PUSH_HANDLER_EXCEPTION',
+      provider,
+      error: { message: err.message, stack: err.stack, detail: detailMsg }
+    }, '❌ 推送数据到多维表格失败');
     return NextResponse.json({ error: detailMsg }, { status: 500 });
   }
 }
+
+export const POST = withLogging(pushHandler);

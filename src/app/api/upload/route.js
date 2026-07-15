@@ -4,16 +4,22 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { calculateMd5, triggerPreprocessing } from '../../../lib/preprocess.js';
 import { getFileRecord, saveFileRecord, runTtlCleanup } from '../../../lib/db.js';
+import { withLogging, logger } from '../../../lib/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const UPLOAD_DIR = path.resolve(process.cwd(), 'data/uploads');
 
-export async function POST(request) {
+async function uploadHandler(request) {
   try {
     // 运行一次 TTL 清理，删除老文件
-    await runTtlCleanup().catch(e => console.error('TTL cleanup error:', e));
+    await runTtlCleanup().catch(e => {
+      logger.error({ 
+        event: 'TTL_CLEANUP_ERROR', 
+        error: { message: e.message, stack: e.stack } 
+      }, 'TTL cleanup failed');
+    });
 
     const formData = await request.formData();
     const file = formData.get('file');
@@ -49,12 +55,19 @@ export async function POST(request) {
         }
         physicalExists = true;
       } catch {
-        console.warn(`⚠️ [MD5: ${md5}] 数据库标记已处理，但物理文件缺失，将重新触发解析。`);
+        logger.warn({
+          event: 'PREPROCESS_PHYSICAL_MISSING',
+          file: { md5, ext }
+        }, `⚠️ [MD5: ${md5}] 数据库标记已处理，但物理文件缺失，将重新触发解析。`);
       }
     }
 
     if (existing && (existing.status !== 'done' || physicalExists)) {
-      console.log(`🎯 [MD5: ${md5}] 文件已存在且已被预处理，直接复用记录。`);
+      logger.info({
+        event: 'PREPROCESS_CACHE_HIT',
+        file: { md5, ext },
+        status: existing.status
+      }, `🎯 [MD5: ${md5}] 文件已存在且已被预处理，直接复用记录。`);
       return NextResponse.json({ 
         success: true, 
         isDuplicate: true, 
@@ -88,7 +101,12 @@ export async function POST(request) {
     });
 
   } catch (err) {
-    console.error('上传与解析失败:', err);
+    logger.error({
+      event: 'UPLOAD_PROCESSING_ERROR',
+      error: { message: err.message, stack: err.stack }
+    }, '上传与解析失败');
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
+export const POST = withLogging(uploadHandler);

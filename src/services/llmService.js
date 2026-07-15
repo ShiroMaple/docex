@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { config } from '../config.js';
+import { logger } from '../lib/logger.js';
 
 /**
  * 通用多模态文档提取服务（解耦业务逻辑）
@@ -111,7 +112,11 @@ export async function extractCustomFields(multimodalData, { systemPrompt, userPr
   const enhancedSystemPrompt = `${systemPrompt}${keyInstructions}`;
 
   try {
-    console.log('⏳ 正在尝试使用 Structured Outputs (json_schema) 模式...');
+    logger.info({
+      event: 'LLM_STRUCTURED_OUTPUTS_START',
+      model
+    }, '⏳ 正在尝试使用 Structured Outputs (json_schema) 模式...');
+
     const response = await openai.chat.completions.create({
       model: model,
       messages: [
@@ -135,18 +140,35 @@ export async function extractCustomFields(multimodalData, { systemPrompt, userPr
     // 容错处理：大模型有时没有严格遵循 schema key，而是返回了中文列名或别名作为键值，进行防御性转换对齐
     const translated = translateResultKeys(results, fields);
 
+    const usage = response.usage ? {
+      promptTokens: response.usage.prompt_tokens,
+      completionTokens: response.usage.completion_tokens,
+      totalTokens: response.usage.total_tokens
+    } : null;
+
+    logger.info({
+      event: 'LLM_EXTRACTION_SUCCESS',
+      model,
+      metrics: {
+        promptTokens: usage?.promptTokens,
+        completionTokens: usage?.completionTokens,
+        totalTokens: usage?.totalTokens,
+        recordsCount: translated.length
+      }
+    }, '🎉 AI 文档结构化数据提取成功完成');
+
     return {
       data: translated,
       raw: rawContent,
-      usage: response.usage ? {
-        promptTokens: response.usage.prompt_tokens,
-        completionTokens: response.usage.completion_tokens,
-        totalTokens: response.usage.total_tokens
-      } : null
+      usage: usage
     };
 
   } catch (parseError) {
-    console.warn('⚠️ completions.create (json_schema) 失败或不支持，自动降级为 JSON Mode 兼容提取:', parseError.message);
+    logger.warn({
+      event: 'LLM_JSON_MODE_FALLBACK',
+      model,
+      error: parseError.message
+    }, '⚠️ completions.create (json_schema) 失败或不支持，自动降级为 JSON Mode 兼容提取');
 
     // 强引导提示词
     const fallbackSystemPrompt = `${enhancedSystemPrompt}\n\n【关键规范】：你必须且只能返回一个合法的 JSON 格式，顶级键名必须为 "results"，其值是一个数组。不要包含 markdown 格式标记，直接输出 JSON 文本。
@@ -163,7 +185,11 @@ export async function extractCustomFields(multimodalData, { systemPrompt, userPr
         response_format: { type: 'json_object' }
       });
     } catch (apiErr) {
-      // 接口调用彻底失败，直接向外抛出
+      logger.error({
+        event: 'LLM_API_ERROR',
+        model,
+        error: { message: apiErr.message, stack: apiErr.stack }
+      }, '大模型 API 调用彻底失败');
       throw apiErr;
     }
 
@@ -177,6 +203,11 @@ export async function extractCustomFields(multimodalData, { systemPrompt, userPr
     if (!rawContent) {
       const err = new Error('降级 JSON Mode 调用未返回任何内容');
       err.usage = usage;
+      logger.error({
+        event: 'LLM_EMPTY_CONTENT_ERROR',
+        model,
+        metrics: usage
+      }, '降级 JSON Mode 调用未返回任何内容');
       throw err;
     }
 
@@ -190,16 +221,35 @@ export async function extractCustomFields(multimodalData, { systemPrompt, userPr
       const results = parsed.results || [];
       const translated = translateResultKeys(results, fields);
 
+      logger.info({
+        event: 'LLM_EXTRACTION_SUCCESS_FALLBACK',
+        model,
+        metrics: {
+          promptTokens: usage?.promptTokens,
+          completionTokens: usage?.completionTokens,
+          totalTokens: usage?.totalTokens,
+          recordsCount: translated.length
+        }
+      }, '🎉 AI 文档结构化数据提取成功完成 (降级 JSON Mode)');
+
       return {
         data: translated,
         raw: rawContent,
         usage: usage
       };
     } catch (jsonErr) {
-      // JSON 解析失败，仍然需要将已消耗的 token 统计和原始文本挂载至 Error 对象抛出
       const err = new Error(`大模型返回了非法的 JSON 格式，解析失败: ${jsonErr.message}`);
       err.raw = rawContent;
       err.usage = usage;
+      
+      logger.error({
+        event: 'LLM_JSON_PARSE_ERROR',
+        model,
+        metrics: usage,
+        rawContent: rawContent,
+        error: jsonErr.message
+      }, '大模型返回了非法的 JSON 格式，解析失败');
+      
       throw err;
     }
   }

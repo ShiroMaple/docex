@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createFeishuField } from '../../../services/feishuService.js';
 import wpsService from '../../../services/wpsService.js';
+import { withLogging, logger } from '../../../lib/logger.js';
 
 /**
  * 动态在多维表格中新建一列
  */
-export async function POST(request) {
+async function createFieldHandler(request) {
   try {
     const { provider, fileId, appToken, tableId, fieldName } = await request.json();
 
@@ -31,7 +32,14 @@ export async function POST(request) {
     }
 
   } catch (err) {
-    console.error('新建多维表格字段失败:', err);
+    logger.error({
+      event: 'CREATE_FIELD_HANDLER_EXCEPTION',
+      provider,
+      fieldName,
+      error: { message: err.message, stack: err.stack }
+    }, '新建多维表格字段失败');
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
+export const POST = withLogging(createFieldHandler);

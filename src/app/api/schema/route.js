@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import wpsService from '../../../services/wpsService.js';
 import { getFeishuSchema } from '../../../services/feishuService.js';
+import { withLogging, logger } from '../../../lib/logger.js';
 
-export async function GET(request) {
+async function schemaHandler(request) {
   const { searchParams } = new URL(request.url);
   const provider = searchParams.get('provider')?.trim() || 'wps';
   const force = searchParams.get('force') === 'true';
@@ -42,7 +43,13 @@ export async function GET(request) {
       return NextResponse.json({ error: '不支持的 provider' }, { status: 400 });
     }
   } catch (err) {
-    console.error('获取 Schema 失败:', err.message);
+    logger.error({
+      event: 'SCHEMA_HANDLER_EXCEPTION',
+      provider,
+      error: { message: err.message, stack: err.stack }
+    }, '获取 Schema 失败');
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
+export const GET = withLogging(schemaHandler);

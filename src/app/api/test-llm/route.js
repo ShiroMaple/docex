@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { config } from '../../../config.js';
 import { checkRateLimit } from '../../../lib/rateLimit.js';
+import { withLogging, logger } from '../../../lib/logger.js';
 
 /**
  * 验证大模型可用性及多模态 Vision 支持
  */
-export async function POST(request) {
+async function testLlmHandler(request) {
   try {
     let { apiKey, baseUrl, model } = await request.json();
 
@@ -14,6 +15,7 @@ export async function POST(request) {
     if (isDefaultKey) {
       const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1';
       if (!checkRateLimit(ip)) {
+        logger.warn({ event: 'RATE_LIMIT_EXCEEDED', ip }, '默认 API Key 频次超限被拦截');
         return NextResponse.json({ 
           error: '⚠️ 访问受限：您当前使用的是系统默认共享 AI 配置，调用太频繁。请稍候再试（限制为 5 次/分钟），或在配置中设置您自有的 API Key 以解除限制。' 
         }, { status: 429 });
@@ -65,7 +67,11 @@ export async function POST(request) {
         supportVision = true;
       }
     } catch (visionError) {
-      console.warn('多模态 Vision 测试失败，将尝试纯文本可用性测试:', visionError.message);
+      logger.warn({
+        event: 'TEST_LLM_VISION_FAILED',
+        model,
+        error: visionError.message
+      }, '多模态 Vision 测试失败，将尝试纯文本可用性测试');
     }
 
     // 2. 如果 Vision 测试失败，测试纯文本连通性
@@ -82,12 +88,23 @@ export async function POST(request) {
         }
       } catch (textError) {
         // 说明模型连通性彻底失败
+        logger.error({
+          event: 'TEST_LLM_TEXT_FAILED',
+          model,
+          error: textError.message
+        }, '大模型连通测试彻底失败');
         return NextResponse.json({ 
           success: false, 
           error: `大模型连接失败: ${textError.message}` 
         }, { status: 500 });
       }
     }
+
+    logger.info({
+      event: 'TEST_LLM_SUCCESS',
+      model,
+      supportVision
+    }, '大模型连通测试成功');
 
     return NextResponse.json({
       success: true,
@@ -97,6 +114,12 @@ export async function POST(request) {
     });
 
   } catch (err) {
+    logger.error({
+      event: 'TEST_LLM_HANDLER_EXCEPTION',
+      error: { message: err.message, stack: err.stack }
+    }, '大模型连通测试异常');
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
+
+export const POST = withLogging(testLlmHandler);

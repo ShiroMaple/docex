@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { config } from '../../../config.js';
 import { checkRateLimit } from '../../../lib/rateLimit.js';
+import { withLogging, logger } from '../../../lib/logger.js';
 
 /**
  * 大模型辅助一键优化提示词
  */
-export async function POST(request) {
+async function optimizePromptHandler(request) {
   try {
     let { apiKey, baseUrl, model, prompt, fields } = await request.json();
 
@@ -14,6 +15,7 @@ export async function POST(request) {
     if (isDefaultKey) {
       const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1';
       if (!checkRateLimit(ip)) {
+        logger.warn({ event: 'RATE_LIMIT_EXCEEDED', ip }, '默认 API Key 频次超限被拦截');
         return NextResponse.json({ 
           error: '⚠️ 访问受限：您当前使用的是系统默认共享 AI 配置，调用太频繁。请稍候再试（限制为 5 次/分钟），或在配置中设置您自有的 API Key 以解除限制。' 
         }, { status: 429 });
@@ -66,9 +68,20 @@ ${fieldsDesc}
 
     const optimizedPrompt = response.choices[0]?.message?.content?.trim() || prompt;
     
+    logger.info({
+      event: 'PROMPT_OPTIMIZED',
+      model
+    }, '提示词优化成功');
+
     return NextResponse.json({ success: true, optimizedPrompt });
 
   } catch (err) {
+    logger.error({
+      event: 'OPTIMIZE_PROMPT_HANDLER_EXCEPTION',
+      error: { message: err.message, stack: err.stack }
+    }, '优化提示词失败');
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
+export const POST = withLogging(optimizePromptHandler);

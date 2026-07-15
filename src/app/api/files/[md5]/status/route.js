@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getFileRecord } from '../../../../../lib/db.js';
+import { withLogging, logger } from '../../../../../lib/logger.js';
 
 /**
  * 轮询接口：获取特定 MD5 文件的预处理状态与进度
  */
-export async function GET(request, context) {
+async function getStatusHandler(request, context) {
   try {
     const params = await context.params;
     const md5 = params.md5;
@@ -25,6 +26,12 @@ export async function GET(request, context) {
       fileName: record.fileName
     });
   } catch (err) {
+    logger.error({
+      event: 'GET_STATUS_HANDLER_EXCEPTION',
+      error: { message: err.message, stack: err.stack }
+    }, '获取文件状态失败');
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
+export const GET = withLogging(getStatusHandler);

@@ -4,6 +4,8 @@ node_modules/
 .DS_Store
 Thumbs.db
 scratch/
+docs/
+logs/
 
 # Next.js Build and Cache
 .next/

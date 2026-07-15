@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { config } from '../config.js';
+import { logger } from '../lib/logger.js';
 
 // docex 内部字段 key → 常见中文表头关键词（用于模糊自动匹配）
 const FIELD_KEYWORDS = {
@@ -58,19 +59,39 @@ class WpsService {
       throw new Error('未配置 WPS_APP_ID 或 WPS_APP_SECRET，无法获取 Access Token');
     }
 
+    logger.info({
+      event: 'WPS_GET_TOKEN_START',
+      appId: activeAppId
+    }, '开始获取 WPS Access Token');
+
     const params = new URLSearchParams();
     params.append('grant_type', 'client_credentials');
     params.append('client_id', activeAppId);
     params.append('client_secret', activeAppSecret);
 
-    const response = await axios.post('https://openapi.wps.cn/oauth2/token', params, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-    });
+    try {
+      const response = await axios.post('https://openapi.wps.cn/oauth2/token', params, {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+      });
 
-    const token = response.data.access_token;
-    const expireTime = now + (response.data.expires_in - 300) * 1000;
-    this._tokenCache = { token, expireTime, appId: activeAppId };
-    return token;
+      const token = response.data.access_token;
+      const expireTime = now + (response.data.expires_in - 300) * 1000;
+      this._tokenCache = { token, expireTime, appId: activeAppId };
+
+      logger.info({
+        event: 'WPS_GET_TOKEN_SUCCESS',
+        appId: activeAppId
+      }, '获取 WPS Access Token 成功');
+
+      return token;
+    } catch (error) {
+      logger.error({
+        event: 'WPS_GET_TOKEN_ERROR',
+        appId: activeAppId,
+        error: { message: error.message, stack: error.stack }
+      }, '获取 WPS Access Token 失败');
+      throw error;
+    }
   }
 
   /**
@@ -87,22 +108,48 @@ class WpsService {
     }
     if (!this.fileId) throw new Error('未设置 fileId');
 
-    const token = await this.getAccessToken(appId, appSecret);
-    const url = `https://openapi.wps.cn/v7/coop/dbsheet/${this.fileId}/schema`;
-    const res = await axios.get(url, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    logger.info({
+      event: 'WPS_GET_SCHEMA_START',
+      fileId: this.fileId,
+      sheetName
+    }, '开始获取 WPS 多维表格 Schema');
 
-    const sheets = res.data?.data?.sheets ?? [];
-    const sheet = sheetName
-      ? sheets.find(s => s.name === sheetName)
-      : sheets.find(s => s.sheet_type === 'xlEtDataBaseSheet');
+    try {
+      const token = await this.getAccessToken(appId, appSecret);
+      const url = `https://openapi.wps.cn/v7/coop/dbsheet/${this.fileId}/schema`;
+      const res = await axios.get(url, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
 
-    if (!sheet) throw new Error(`未找到数据表 "${sheetName ?? '(任意数据表)'}"，请检查表名`);
+      const sheets = res.data?.data?.sheets ?? [];
+      const sheet = sheetName
+        ? sheets.find(s => s.name === sheetName)
+        : sheets.find(s => s.sheet_type === 'xlEtDataBaseSheet');
 
-    this._schemaCache = sheet;
-    this._schemaCacheTime = now;
-    return sheet;
+      if (!sheet) {
+        throw new Error(`未找到数据表 "${sheetName ?? '(任意数据表)'}"，请检查表名`);
+      }
+
+      this._schemaCache = sheet;
+      this._schemaCacheTime = now;
+
+      logger.info({
+        event: 'WPS_GET_SCHEMA_SUCCESS',
+        fileId: this.fileId,
+        sheetName: sheet.name,
+        fieldsCount: sheet.fields?.length
+      }, '获取 WPS 多维表格 Schema 成功');
+
+      return sheet;
+    } catch (error) {
+      logger.error({
+        event: 'WPS_GET_SCHEMA_ERROR',
+        fileId: this.fileId,
+        sheetName,
+        error: { message: error.message, stack: error.stack }
+      }, '获取 WPS 多维表格 Schema 失败');
+      throw error;
+    }
   }
 
   /**
@@ -139,88 +186,145 @@ class WpsService {
     if (!issues || issues.length === 0) return;
     if (!this.fileId) throw new Error('未配置 fileId，无法推送记录');
 
-    const token = await this.getAccessToken(appId, appSecret);
-    const sheet = await this.getSchema(sheetName, false, appId, appSecret);
+    logger.info({
+      event: 'WPS_APPEND_RECORDS_START',
+      fileId: this.fileId,
+      sheetName,
+      recordsCount: issues.length
+    }, `开始批量写入 ${issues.length} 条记录至 WPS 多维表格`);
 
-    // 识别只读的系统字段，确保不尝试向其写入任何值
-    const READ_ONLY_TYPES = ['CreatedTime', 'CreatedBy', 'Creator', 'LastModifiedTime', 'LastModifiedBy', 'Modifier'];
-    const writeableFields = sheet.fields.filter(f => !READ_ONLY_TYPES.includes(f.type));
-    const writeableWpsNames = new Set(writeableFields.map(f => f.name));
+    try {
+      const token = await this.getAccessToken(appId, appSecret);
+      const sheet = await this.getSchema(sheetName, false, appId, appSecret);
 
-    // 使用用户传入的映射，或自动推断
-    const resolvedMapping = fieldMapping ?? this.buildAutoFieldMapping(sheet.fields);
+      // 识别只读的系统字段，确保不尝试向其写入任何值
+      const READ_ONLY_TYPES = ['CreatedTime', 'CreatedBy', 'Creator', 'LastModifiedTime', 'LastModifiedBy', 'Modifier'];
+      const writeableFields = sheet.fields.filter(f => !READ_ONLY_TYPES.includes(f.type));
+      const writeableWpsNames = new Set(writeableFields.map(f => f.name));
 
-    // 反转映射：docexKey → wpsFieldName
-    const docexToWps = {};
-    for (const [wpsName, docexKey] of Object.entries(resolvedMapping)) {
-      if (writeableWpsNames.has(wpsName)) {
-        docexToWps[docexKey] = wpsName;
-      }
-    }
+      // 使用用户传入的映射，或自动推断
+      const resolvedMapping = fieldMapping ?? this.buildAutoFieldMapping(sheet.fields);
 
-    const url = `https://openapi.wps.cn/v7/coop/dbsheet/${this.fileId}/sheets/${sheet.id}/records/create`;
-
-    const records = issues.map(issue => {
-      const fields = {};
-      for (const [docexKey, wpsName] of Object.entries(docexToWps)) {
-        if (issue[docexKey] !== undefined && issue[docexKey] !== '') {
-          fields[wpsName] = issue[docexKey];
+      // 反转映射：docexKey → wpsFieldName
+      const docexToWps = {};
+      for (const [wpsName, docexKey] of Object.entries(resolvedMapping)) {
+        if (writeableWpsNames.has(wpsName)) {
+          docexToWps[docexKey] = wpsName;
         }
       }
-      return { fields_value: JSON.stringify(fields) };
-    });
 
-    const response = await axios.post(url, { prefer_id: false, records }, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
+      const url = `https://openapi.wps.cn/v7/coop/dbsheet/${this.fileId}/sheets/${sheet.id}/records/create`;
 
-    console.log(`✨ 成功写入 ${issues.length} 条记录到 WPS 多维表格（表：${sheet.name}）`);
-    return response.data;
+      const records = issues.map(issue => {
+        const fields = {};
+        for (const [docexKey, wpsName] of Object.entries(docexToWps)) {
+          if (issue[docexKey] !== undefined && issue[docexKey] !== '') {
+            fields[wpsName] = issue[docexKey];
+          }
+        }
+        return { fields_value: JSON.stringify(fields) };
+      });
+
+      const response = await axios.post(url, { prefer_id: false, records }, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      logger.info({
+        event: 'WPS_APPEND_RECORDS_SUCCESS',
+        fileId: this.fileId,
+        sheetName: sheet.name,
+        recordsCount: issues.length
+      }, `✨ 成功写入 ${issues.length} 条记录到 WPS 多维表格（表：${sheet.name}）`);
+
+      return response.data;
+    } catch (error) {
+      logger.error({
+        event: 'WPS_APPEND_RECORDS_ERROR',
+        fileId: this.fileId,
+        sheetName,
+        error: { message: error.message, stack: error.stack }
+      }, '批量写入 WPS 多维表格失败');
+      throw error;
+    }
   }
 
   /**
    * 在 WPS 多维表格中新增一列（文本类型）
    */
   async createField(fileId, fieldName, appId = null, appSecret = null) {
-    const token = await this.getAccessToken(appId, appSecret);
-    const sheet = await this.getSchema(null, false, appId, appSecret);
-    const url = `https://openapi.wps.cn/v7/coop/dbsheet/${fileId}/sheets/${sheet.id}/fields/create`;
+    logger.info({
+      event: 'WPS_CREATE_FIELD_START',
+      fileId,
+      fieldName
+    }, `开始在 WPS 多维表格中新建一列: ${fieldName}`);
 
-    const response = await axios.post(url, {
-      name: fieldName,
-      type: 'Text'
-    }, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    try {
+      const token = await this.getAccessToken(appId, appSecret);
+      const sheet = await this.getSchema(null, false, appId, appSecret);
+      const url = `https://openapi.wps.cn/v7/coop/dbsheet/${fileId}/sheets/${sheet.id}/fields/create`;
 
-    // 强行清理缓存，使下一次读取能同步到新字段
-    this._schemaCache = null;
-    this._schemaCacheTime = 0;
+      const response = await axios.post(url, {
+        name: fieldName,
+        type: 'Text'
+      }, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
-    return response.data;
+      // 强行清理缓存，使下一次读取能同步到新字段
+      this._schemaCache = null;
+      this._schemaCacheTime = 0;
+
+      logger.info({
+        event: 'WPS_CREATE_FIELD_SUCCESS',
+        fileId,
+        fieldName
+      }, `在 WPS 多维表格中新建列成功: ${fieldName}`);
+
+      return response.data;
+    } catch (error) {
+      logger.error({
+        event: 'WPS_CREATE_FIELD_ERROR',
+        fileId,
+        fieldName,
+        error: { message: error.message, stack: error.stack }
+      }, '在 WPS 多维表格中新建列失败');
+      throw error;
+    }
   }
 
   /**
    * 获取 WPS 表格最后一行的序号最大值
    */
   async getWpsLastSerialNumber(fileId, serialFieldName, appId = null, appSecret = null) {
-    const token = await this.getAccessToken(appId, appSecret);
-    const sheet = await this.getSchema(null, false, appId, appSecret);
-    const url = `https://openapi.wps.cn/v7/coop/dbsheet/${fileId}/sheets/${sheet.id}/records`;
-    
+    logger.info({
+      event: 'WPS_GET_SERIAL_START',
+      fileId,
+      fieldName: serialFieldName
+    }, `开始获取 WPS 多维表格自增序号最大值: ${serialFieldName}`);
+
     try {
+      const token = await this.getAccessToken(appId, appSecret);
+      const sheet = await this.getSchema(null, false, appId, appSecret);
+      const url = `https://openapi.wps.cn/v7/coop/dbsheet/${fileId}/sheets/${sheet.id}/records`;
+      
       const response = await axios.get(url, {
         headers: { Authorization: `Bearer ${token}` },
         params: { limit: 100 }
       });
       const records = response.data?.data?.records || [];
-      if (records.length === 0) return 0;
+      if (records.length === 0) {
+        logger.info({
+          event: 'WPS_GET_SERIAL_EMPTY',
+          fileId
+        }, '表格暂无记录，自增序列号返回 0');
+        return 0;
+      }
       
       let maxVal = 0;
       for (const r of records) {
@@ -232,9 +336,20 @@ class WpsService {
           }
         } catch {}
       }
+
+      logger.info({
+        event: 'WPS_GET_SERIAL_SUCCESS',
+        fileId,
+        maxVal
+      }, `获取 WPS 自增序号最大值成功: ${maxVal}`);
+
       return maxVal;
     } catch (e) {
-      console.warn('WPS 获取最后行业务序列号失败，从 0 开始:', e.message);
+      logger.warn({
+        event: 'WPS_GET_SERIAL_WARNING',
+        fileId,
+        error: e.message
+      }, 'WPS 获取最后行业务序列号失败，从 0 开始');
       return 0;
     }
   }

@@ -6,6 +6,7 @@ import { getFileRecord } from '../../../lib/db.js';
 import { extractCustomFields } from '../../../services/llmService.js';
 import { config } from '../../../config.js';
 import { checkRateLimit } from '../../../lib/rateLimit.js';
+import { withLogging, logger } from '../../../lib/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -52,7 +53,11 @@ function checkPromptSecurity(systemPrompt, userPrompt, fields) {
   for (const text of contentsToValidate) {
     for (const pattern of attackPatterns) {
       if (pattern.test(text)) {
-        console.warn(`🚨 Prompt Security Shield: 检测到攻击模式匹配 ${pattern}。拦截内容: "${text.substring(0, 100)}..."`);
+        logger.warn({
+          event: 'PROMPT_SECURITY_ALERT',
+          pattern: pattern.toString(),
+          blockedSnippet: text.substring(0, 100)
+        }, '🚨 Prompt Security Shield: 检测到潜在攻击模式被拦截');
         return true; // Detected attack!
       }
     }
@@ -64,7 +69,7 @@ function checkPromptSecurity(systemPrompt, userPrompt, fields) {
  * POST /api/extract
  * 运行大模型识别并提取数据
  */
-export async function POST(request) {
+async function extractHandler(request) {
   try {
     const { md5, systemPrompt, userPrompt, fields, llmConfig } = await request.json();
 
@@ -79,6 +84,7 @@ export async function POST(request) {
     if (isDefaultKey) {
       const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1';
       if (!checkRateLimit(ip)) {
+        logger.warn({ event: 'RATE_LIMIT_EXCEEDED', ip }, '默认 API Key 频次超限被拦截');
         return NextResponse.json({ 
           error: '⚠️ 访问受限：您当前使用的是系统默认共享 AI 配置，调用太频繁。请稍候再试（限制为 5 次/分钟），或在配置中设置您自有的 API Key 以解除限制。' 
         }, { status: 429 });
@@ -155,14 +161,23 @@ export async function POST(request) {
         multimodalData = parts;
       }
     } catch (fsErr) {
-      console.error('读取文档预处理产物失败:', fsErr);
+      logger.error({
+        event: 'READ_PREPROCESSED_ARTIFACTS_FAILED',
+        file: { md5, ext },
+        error: { message: fsErr.message, stack: fsErr.stack }
+      }, '读取文档预处理产物失败');
       return NextResponse.json({ 
         error: `读取文档预处理产物失败: ${fsErr.code === 'ENOENT' ? '缓存文件已失效或被物理清理，请在队列中点击 [X] 移除该文档后重新上传解析。' : fsErr.message}` 
       }, { status: 500 });
     }
 
     // ── 调用大模型 ──
-    console.log(`🤖 [MD5: ${md5}] 提交大模型提取，字段数: ${fields.length}...`);
+    logger.info({
+      event: 'LLM_EXTRACTION_START',
+      file: { md5, name: record.fileName, type: ext },
+      fieldsCount: fields.length
+    }, `🤖 [MD5: ${md5}] 提交大模型提取，字段数: ${fields.length}...`);
+    
     const { data, raw, usage } = await extractCustomFields(multimodalData, {
       systemPrompt,
       userPrompt,
@@ -178,7 +193,10 @@ export async function POST(request) {
     });
 
   } catch (err) {
-    console.error('提取失败:', err);
+    logger.error({
+      event: 'EXTRACTION_HANDLER_EXCEPTION',
+      error: { message: err.message, stack: err.stack, rawContent: err.raw || null }
+    }, '提取失败');
     return NextResponse.json({ 
       error: err.message,
       raw: err.raw || null,
@@ -186,3 +204,5 @@ export async function POST(request) {
     }, { status: 500 });
   }
 }
+
+export const POST = withLogging(extractHandler);
