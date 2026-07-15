@@ -55,6 +55,23 @@ jobs:
           cp ecosystem.config.cjs .next/standalone/ecosystem.config.cjs
           cd .next/standalone
           tar -czf ../../release.tar.gz .
+      
+      # 【新增步骤】在 GitHub 虚拟环境中尝试热启动，捕获依赖缺失错误
+      - name: Smoke Test Standalone Build
+        run: |
+          # 1. 在后台启动 standalone 服务
+          PORT=3000 node .next/standalone/server.js &
+          SERVER_PID=$!
+          
+          # 2. 等待 3 秒让服务充分初始化
+          sleep 3
+          
+          # 3. 尝试向服务发送请求，如果报错（如找不到模块），curl 会返回非0状态码，导致工作流直接中断报错
+          curl -I http://localhost:3000 || (echo "❌ Standalone 启动失败，可能存在缺失的依赖！" && kill $SERVER_PID && exit 1)
+          
+          # 4. 测试成功，关闭后台进程
+          kill $SERVER_PID
+          echo "✅ Standalone 烟雾测试通过，可以安全发布！"      
 
       # 7. 将压缩包发送至服务器的 /var/www/docex
       - name: Copy Files to Server
