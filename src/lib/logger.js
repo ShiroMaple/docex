@@ -2,6 +2,9 @@ import { AsyncLocalStorage } from 'async_hooks';
 import pino from 'pino';
 import crypto from 'crypto';
 import { NextResponse } from 'next/server';
+import 'pino-roll';
+import 'pino-pretty';
+
 
 export const als = new AsyncLocalStorage();
 
