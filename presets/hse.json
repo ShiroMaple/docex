@@ -1,0 +1,75 @@
+{
+  "id": "hse",
+  "name": "智能结构化提取 · 安全环保部",
+  "department": "安全环保部",
+  "subtitle": "预设用于提取安全检查报告的字段和提示词",
+  "badgeText": "智能结构化提取文档数据-【安全环保部】专用",
+  "icon": "🛡️",
+  "locked": false,
+  "allowCustomModel": false,
+  "allowCustomPlatform": false,
+  "allowCustomFields": false,
+  "allowCustomPrompt": false,
+  "systemPrompt": "你是一个专业的安全检查报告解析专家。你的任务是：\n根据输入的文档内容（包含文字参考层、表格结构以及视觉截图），提取出所有的安全隐患（问题）。\n请依据字段定义完整提取，表格与图片中的信息同样重要。\n检查日期尽量转化为 YYYY-MM-DD 格式，如无法转化则保持原文。\n文档中可能包含多个安全问题，必须区分不同问题，确保返回的 results 数组中的每一项都代表一条独立的安全问题。",
+  "userPrompt": "请分析以下安全检查报告文档内容并提取结构化隐患列表：",
+  "fields": [
+    {
+      "key": "projectName",
+      "label": "项目名称",
+      "desc": "隐患对应的项目或工程名称",
+      "example": "",
+      "isAdvancedOpen": false
+    },
+    {
+      "key": "issueType",
+      "label": "问题类型",
+      "desc": "安全问题分类，如临时用电、高处作业",
+      "example": "",
+      "isAdvancedOpen": false
+    },
+    {
+      "key": "inspectionArea",
+      "label": "检查区域",
+      "desc": "问题被发现的具体位置、点位",
+      "example": "",
+      "isAdvancedOpen": false
+    },
+    {
+      "key": "description",
+      "label": "问题描述",
+      "desc": "安全隐患的现状具体描述",
+      "example": "",
+      "isAdvancedOpen": false
+    },
+    {
+      "key": "rectificationRequirement",
+      "label": "整改要求",
+      "desc": "整改措施或限期完成的要求意见",
+      "example": "",
+      "isAdvancedOpen": false
+    },
+    {
+      "key": "inspector",
+      "label": "检查人员",
+      "desc": "发现问题的检查人员姓名",
+      "example": "",
+      "isAdvancedOpen": false
+    },
+    {
+      "key": "inspectionDate",
+      "label": "检查日期",
+      "desc": "发现隐患的日期 (YYYY-MM-DD)",
+      "example": "",
+      "isAdvancedOpen": false
+    }
+  ],
+  "fieldMapping": {
+    "项目名称": "projectName",
+    "问题类型": "issueType",
+    "检查区域": "inspectionArea",
+    "问题描述": "description",
+    "整改要求": "rectificationRequirement",
+    "检查人员": "inspector",
+    "检查日期": "inspectionDate"
+  }
+}

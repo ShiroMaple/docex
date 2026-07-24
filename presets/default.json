@@ -1,0 +1,35 @@
+{
+  "id": "default",
+  "name": "智能结构化提取",
+  "department": "通用版",
+  "subtitle": "自定义提取字段与提示词",
+  "badgeText": "智能结构化提取文档数据",
+  "icon": "🌐",
+  "locked": false,
+  "allowCustomModel": true,
+  "allowCustomPlatform": true,
+  "allowCustomFields": true,
+  "allowCustomPrompt": true,
+  "systemPrompt": "你是一个专业的文档解析专家。你的任务是：\n根据输入的文档内容（包含文字参考层、表格结构以及视觉截图），解析出所有提取字段定义的信息，表格与图片中包含的信息同样重要。\n文档中可能包含多组信息，必须区分不同信息的间隔，确保返回的 results 数组中的每一项都代表一组独立的信息。",
+  "userPrompt": "请分析以下文档内容并提取结构化字段列表：",
+  "fields": [
+    {
+      "key": "field1",
+      "label": "问题描述",
+      "desc": "问题情况的简要概述",
+      "example": "",
+      "isAdvancedOpen": false
+    },
+    {
+      "key": "field2",
+      "label": "问题类型",
+      "desc": "安全问题分类，如临时用电、高处作业",
+      "example": "",
+      "isAdvancedOpen": false
+    }
+  ],
+  "fieldMapping": {
+    "问题描述": "field1",
+    "问题类型": "field2"
+  }
+}

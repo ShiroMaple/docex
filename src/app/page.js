@@ -26,21 +26,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
-const DEFAULT_SYSTEM_PROMPT = `你是一个专业的安全检查报告解析专家。
-你的任务是：根据输入的文档内容（包含文字参考层、表格结构以及视觉截图），提取出所有的安全隐患（问题）。
-请依据字段定义完整提取，表格和图片中包含的信息同样重要。
-检查日期尽量转化为 YYYY-MM-DD 格式，如无法转化则保持原文。
-文档中可能包含多个安全问题，必须区分不同问题，确保返回的 results 数组中的每一项都代表一个独立的安全问题。`;
 
-const DEFAULT_FIELDS = [
-  { key: 'projectName', label: '项目名称', desc: '隐患对应的项目或工程名称', example: '', isAdvancedOpen: false },
-  { key: 'issueType', label: '问题类型', desc: '安全问题分类，如临时用电、高处作业', example: '', isAdvancedOpen: false },
-  { key: 'inspectionArea', label: '检查区域', desc: '问题被发现的具体位置、点位', example: '', isAdvancedOpen: false },
-  { key: 'description', label: '问题描述', desc: '安全隐患的现状具体描述', example: '', isAdvancedOpen: false },
-  { key: 'rectificationRequirement', label: '整改要求', desc: '整改措施或限期完成的要求意见', example: '', isAdvancedOpen: false },
-  { key: 'inspector', label: '检查人员', desc: '发现问题的检查人员姓名', example: '', isAdvancedOpen: false },
-  { key: 'inspectionDate', label: '检查日期', desc: '发现隐患的日期 (YYYY-MM-DD)', example: '', isAdvancedOpen: false }
-];
 
 const PdfIcon = ({ className = "w-6 h-6" }) => (
   <img src="/icons/pdf.svg" alt="PDF" className={className} />
@@ -50,11 +36,37 @@ const WordIcon = ({ className = "w-6 h-6" }) => (
   <img src="/icons/word.svg" alt="Word" className={className} />
 );
 
-export default function DocumentExtractor() {
+export default function DocumentExtractor({ presetId = null }) {
+  // ── Preset State ──
+  const [preset, setPreset] = useState(null);
+  const [allPresetsList, setAllPresetsList] = useState([]);
+
+  // ── Granular Permission Controls ──
+  const canCustomModel = preset ? preset.allowCustomModel !== false : true;
+  const canCustomPlatform = preset ? preset.allowCustomPlatform !== false : true;
+  const canCustomFields = preset ? preset.allowCustomFields !== false : true;
+  const canCustomPrompt = preset ? preset.allowCustomPrompt !== false : true;
+
   // ── Tab Navigation State ──
   const [activeStep, setActiveStep] = useState(1); // 1 | 2 | 3
   const [activePopover, setActivePopover] = useState(null); // 'table' | 'llm' | null
   const [toast, setToast] = useState('');
+
+  // ── Fetch all available presets list on mount ──
+  useEffect(() => {
+    fetch('/api/presets')
+      .then(res => res.json())
+      .then(data => {
+        if (data.presets && data.presets.length > 0) {
+          setAllPresetsList(data.presets);
+        }
+      })
+      .catch(err => {
+        console.error('获取预设列表失败:', err);
+      });
+  }, []);
+
+
 
   // ── Popover: Table Connection ──
   const [platform, setPlatform] = useState('wps'); // 'wps' | 'feishu'
@@ -103,8 +115,8 @@ export default function DocumentExtractor() {
   const fileInputRef = useRef(null);
 
   // ── Step 2: Unified Matrix Schema ──
-  const [customPrompt, setCustomPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
-  const [fields, setFields] = useState(DEFAULT_FIELDS);
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [fields, setFields] = useState([]);
   const [isOptimizingPrompt, setIsOptimizingPrompt] = useState(false);
   const [fieldMappings, setFieldMappings] = useState({}); // { spreadsheetColumnName: docexFieldKey }
   const [isSchemaLoading, setIsSchemaLoading] = useState(false);
@@ -121,6 +133,50 @@ export default function DocumentExtractor() {
   const [pushResult, setPushResult] = useState(null);
   const [rawLlmResponse, setRawLlmResponse] = useState('');
   const [isLlmModalOpen, setIsLlmModalOpen] = useState(false);
+
+  // ── Load Preset Config (Default or Specific) ──
+  useEffect(() => {
+    const targetPresetId = presetId || 'default';
+
+    fetch(`/api/presets/${targetPresetId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.preset) {
+          const p = data.preset;
+          setPreset(p);
+          if (p.fields && p.fields.length > 0) setFields(p.fields);
+          if (p.systemPrompt) setCustomPrompt(p.systemPrompt);
+          if (p.fieldMapping) setFieldMappings(p.fieldMapping);
+          if (p.platform) setPlatform(p.platform);
+
+          if (p.openai) {
+            setLlmConfig({
+              provider: p.llmProvider || p.openai.provider || 'openai',
+              baseUrl: p.openai.baseUrl,
+              model: p.openai.model,
+              apiKey: p.openai.apiKey || ''
+            });
+            if (p.openai.apiKey) {
+              setLlmConnected(true);
+            }
+          }
+
+          if (p.platform === 'feishu' && p.lark) {
+            setFeishuAppToken(p.lark.appToken || '');
+            setFeishuTableId(p.lark.tableId || '');
+            setTableAppId(p.lark.appId || '');
+            setTableAppSecret(p.lark.appSecret || '');
+          } else if (p.platform === 'wps' && p.wps) {
+            setWpsFileId(p.wps.baseId || '');
+            setTableAppId(p.wps.appId || '');
+            setTableAppSecret(p.wps.appSecret || '');
+          }
+        }
+      })
+      .catch(err => {
+        console.error(`加载预设 [${presetId}] 失败:`, err);
+      });
+  }, [presetId]);
 
   // ── Load credentials & configurations ──
   useEffect(() => {
@@ -1402,9 +1458,70 @@ export default function DocumentExtractor() {
       <header className="sticky top-0 z-40 bg-parchment/85 backdrop-blur-md border-b border-border-cream">
         <div className="max-w-[1440px] mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/icons/logo_maple.jpg" alt="Logo" className="w-6 h-6 object-cover rounded-md" />
-            <span className="font-serif font-bold text-lg leading-none tracking-tight">DocEx</span>
-            <span className="text-x font-bold tracking-wider text-olive-black bg-warm-sand px-2 py-0.5 rounded-full uppercase">智能结构化提取文档数据</span>
+            <a href="/" className="flex items-center gap-2 hover:opacity-90 transition">
+              <img src="/icons/logo_maple.jpg" alt="Logo" className="w-6 h-6 object-cover rounded-md" />
+              <span className="font-serif font-bold text-lg leading-none tracking-tight">DocEx</span>
+            </a>
+
+            {/* Version / Preset Selector Dropdown */}
+            <div className="relative popover-container">
+              <button
+                onClick={() => setActivePopover(activePopover === 'version' ? null : 'version')}
+                className="text-l font-bold tracking-wider text-olive-black bg-warm-sand hover:bg-warm-sand/80 border border-transparent hover:border-stone-gray/30 px-3 py-1 rounded-full flex items-center gap-1.5 transition select-none shadow-xs"
+                title="点击切换页面版本或专有部门预设"
+              >
+                <span>
+                  {preset
+                    ? (preset.badgeText || preset.subtitle || preset.name)
+                    : (allPresetsList.find(p => p.id === 'default')?.badgeText || '智能结构化提取文档数据')}
+                </span>
+                <ChevronDown size={12} className={`text-stone-gray transition-transform duration-200 ${activePopover === 'version' ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Dropdown Menu */}
+              {activePopover === 'version' && (
+                <div className="absolute left-0 mt-2 w-64 bg-ivory border border-border-cream rounded-xl shadow-xl p-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="text-[12px] font-bold text-stone-gray uppercase tracking-wider px-3 py-1.5">
+                    选择系统应用预设版本
+                  </div>
+
+                  {allPresetsList.length > 0 ? (
+                    allPresetsList.map((item, idx) => {
+                      const isSelected = (!preset && item.id === 'default') || (preset?.id === item.id);
+                      const targetHref = item.id === 'default' ? '/' : `/preset/${item.id}`;
+                      const displayIcon = item.icon || (item.id === 'default' ? '🌐' : '⚙️');
+                      const titleText = item.department ? `${item.department}` : (item.name || item.id);
+
+                      return (
+                        <React.Fragment key={item.id}>
+                          {idx > 0 && <div className="my-1 border-t border-border-cream" />}
+                          <a
+                            href={targetHref}
+                            className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition ${isSelected
+                              ? 'bg-warm-sand text-near-black font-bold border border-border-warm'
+                              : 'text-olive-gray hover:bg-warm-sand/30 hover:text-near-black'
+                              }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm">{displayIcon}</span>
+                              <div className="flex flex-col">
+                                <span>{titleText}</span>
+                                <span className="text-[10px] text-stone-gray font-normal">{item.subtitle || '预设数据提取配置'}</span>
+                              </div>
+                            </div>
+                            {isSelected && <CheckCircle2 size={13} className="text-green-600" />}
+                          </a>
+                        </React.Fragment>
+                      );
+                    })
+                  ) : (
+                    <div className="p-3 text-center text-xs text-stone-gray">
+                      正在加载物理预设列表...
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
@@ -1431,6 +1548,12 @@ export default function DocumentExtractor() {
                   >
                     <h4 className="font-serif font-medium text-sm border-b border-border-cream pb-2 mb-3">多维表格网关</h4>
 
+                    {!canCustomPlatform && (
+                      <div className="p-2.5 mb-3 bg-amber-50 border border-amber-200 rounded text-amber-800 text-xs flex items-center gap-1.5 font-medium">
+                        🔒 配置已由【{preset?.department || '部门预设'}】统一预设。
+                      </div>
+                    )}
+
                     <div className="flex flex-col gap-3 mb-4">
                       {/* Table config selector */}
                       <div className="flex flex-col gap-1">
@@ -1439,7 +1562,8 @@ export default function DocumentExtractor() {
                           <select
                             value={selectedTableConfigId}
                             onChange={(e) => handleTableConfigChange(e.target.value)}
-                            className="flex-1 bg-warm-sand border border-border-warm rounded px-2 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue transition text-near-black"
+                            disabled={!canCustomPlatform}
+                            className="flex-1 bg-warm-sand border border-border-warm rounded px-2 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue transition text-near-black disabled:opacity-60"
                           >
                             {tableConfigList.map(c => (
                               <option key={c.id} value={c.id}>
@@ -1451,7 +1575,8 @@ export default function DocumentExtractor() {
                           {selectedTableConfigId !== 'wps_test' && selectedTableConfigId !== 'feishu_test' && selectedTableConfigId !== 'new' && (
                             <button
                               onClick={() => handleDeleteTableConfig(selectedTableConfigId)}
-                              className="p-1.5 rounded border border-border-cream bg-white hover:bg-red-50 text-stone-gray hover:text-error-crimson transition"
+                              disabled={!canCustomPlatform}
+                              className="p-1.5 rounded border border-border-cream bg-white hover:bg-red-50 text-stone-gray hover:text-error-crimson transition disabled:opacity-50"
                               title="删除该配置"
                             >
                               <Trash2 size={13} />
@@ -1467,7 +1592,8 @@ export default function DocumentExtractor() {
                             type="text"
                             value={customTableConfigName}
                             onChange={(e) => setCustomTableConfigName(e.target.value)}
-                            className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue transition w-full"
+                            disabled={!canCustomPlatform}
+                            className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue transition w-full disabled:opacity-60"
                             placeholder="自定义表格配置名称"
                           />
                         </div>
@@ -1476,7 +1602,8 @@ export default function DocumentExtractor() {
                       <div className="flex gap-2">
                         <button
                           onClick={() => setPlatform('wps')}
-                          className={`flex-1 py-1.5 rounded text-xs font-semibold border transition ${platform === 'wps'
+                          disabled={!canCustomPlatform}
+                          className={`flex-1 py-1.5 rounded text-xs font-semibold border transition disabled:opacity-50 ${platform === 'wps'
                             ? 'bg-warm-sand border-stone-gray text-near-black'
                             : 'bg-ivory border-border-cream text-olive-gray hover:bg-warm-sand/50'
                             }`}
@@ -1485,7 +1612,8 @@ export default function DocumentExtractor() {
                         </button>
                         <button
                           onClick={() => setPlatform('feishu')}
-                          className={`flex-1 py-1.5 rounded text-xs font-semibold border transition ${platform === 'feishu'
+                          disabled={!canCustomPlatform}
+                          className={`flex-1 py-1.5 rounded text-xs font-semibold border transition disabled:opacity-50 ${platform === 'feishu'
                             ? 'bg-warm-sand border-stone-gray text-near-black'
                             : 'bg-ivory border-border-cream text-olive-gray hover:bg-warm-sand/50'
                             }`}
@@ -1501,8 +1629,9 @@ export default function DocumentExtractor() {
                             type="text"
                             value={wpsUrl}
                             onChange={(e) => setWpsUrl(e.target.value)}
+                            disabled={!canCustomPlatform}
                             placeholder="https://365.kdocs.cn/l/xxx"
-                            className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full"
+                            className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full disabled:opacity-50"
                           />
                         </div>
                       ) : (
@@ -1512,8 +1641,9 @@ export default function DocumentExtractor() {
                             type="text"
                             value={feishuUrl}
                             onChange={(e) => setFeishuUrl(e.target.value)}
+                            disabled={!canCustomPlatform}
                             placeholder="https://xxx.feishu.cn/base/xxx"
-                            className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full"
+                            className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full disabled:opacity-50"
                           />
                         </div>
                       )}
@@ -1524,7 +1654,8 @@ export default function DocumentExtractor() {
                           type="text"
                           value={tableAppId}
                           onChange={(e) => setTableAppId(e.target.value)}
-                          className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full"
+                          disabled={!canCustomPlatform}
+                          className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full disabled:opacity-60"
                           placeholder="自定凭证 App ID"
                         />
                       </div>
@@ -1534,7 +1665,8 @@ export default function DocumentExtractor() {
                           type="password"
                           value={tableAppSecret}
                           onChange={(e) => setTableAppSecret(e.target.value)}
-                          className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full"
+                          disabled={!canCustomPlatform}
+                          className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full disabled:opacity-60"
                           placeholder="自定凭证 App Secret"
                         />
                         <div className="mt-1 flex flex-col gap-1">
@@ -1581,8 +1713,8 @@ export default function DocumentExtractor() {
 
                     <button
                       onClick={verifyTableConnection}
-                      disabled={isConnectingTable}
-                      className="w-full bg-terracotta hover:bg-terracotta-hover text-ivory text-xs font-semibold py-2 rounded transition flex items-center justify-center gap-1.5"
+                      disabled={isConnectingTable || !canCustomPlatform}
+                      className="w-full bg-terracotta hover:bg-terracotta-hover text-ivory text-xs font-semibold py-2 rounded transition flex items-center justify-center gap-1.5 disabled:opacity-50"
                     >
                       {isConnectingTable && <Loader2 size={12} className="animate-spin" />}
                       {isConnectingTable ? '同步校验中...' : '验证权限并同步字段'}
@@ -1632,6 +1764,12 @@ export default function DocumentExtractor() {
                   >
                     <h4 className="font-serif font-medium text-sm border-b border-border-cream pb-2 mb-3">AI模型网关配置</h4>
 
+                    {!canCustomModel && (
+                      <div className="p-2.5 mb-3 bg-amber-50 border border-amber-200 rounded text-amber-800 text-xs flex items-center gap-1.5 font-medium">
+                        🔒 配置已由【{preset?.department || '部门预设'}】统一预设。
+                      </div>
+                    )}
+
                     <div className="flex flex-col gap-3 mb-4">
                       {/* Configuration selector */}
                       <div className="flex flex-col gap-1">
@@ -1640,7 +1778,8 @@ export default function DocumentExtractor() {
                           <select
                             value={selectedConfigId}
                             onChange={(e) => handleConfigChange(e.target.value)}
-                            className="flex-1 bg-warm-sand border border-border-warm rounded px-2 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue transition text-near-black"
+                            disabled={!canCustomModel}
+                            className="flex-1 bg-warm-sand border border-border-warm rounded px-2 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue transition text-near-black disabled:opacity-60"
                           >
                             {configList.map(c => (
                               <option key={c.id} value={c.id}>
@@ -1652,7 +1791,8 @@ export default function DocumentExtractor() {
                           {selectedConfigId !== 'default' && selectedConfigId !== 'new' && (
                             <button
                               onClick={() => handleDeleteConfig(selectedConfigId)}
-                              className="p-1.5 rounded border border-border-cream bg-white hover:bg-red-50 text-stone-gray hover:text-error-crimson transition"
+                              disabled={!canCustomModel}
+                              className="p-1.5 rounded border border-border-cream bg-white hover:bg-red-50 text-stone-gray hover:text-error-crimson transition disabled:opacity-50"
                               title="删除该配置"
                             >
                               <Trash2 size={13} />
@@ -1668,7 +1808,8 @@ export default function DocumentExtractor() {
                             type="text"
                             value={customConfigName}
                             onChange={(e) => setCustomConfigName(e.target.value)}
-                            className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue transition w-full"
+                            disabled={!canCustomModel}
+                            className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue transition w-full disabled:opacity-60"
                             placeholder="自定义模型配置名称"
                           />
                         </div>
@@ -1680,7 +1821,7 @@ export default function DocumentExtractor() {
                           type="text"
                           value={llmConfig.provider}
                           onChange={(e) => setLlmConfig({ ...llmConfig, provider: e.target.value })}
-                          disabled={selectedConfigId === 'default'}
+                          disabled={!canCustomModel || selectedConfigId === 'default'}
                           className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full disabled:opacity-60"
                           placeholder="openai"
                         />
@@ -1691,7 +1832,7 @@ export default function DocumentExtractor() {
                           type="text"
                           value={llmConfig.baseUrl}
                           onChange={(e) => setLlmConfig({ ...llmConfig, baseUrl: e.target.value })}
-                          disabled={selectedConfigId === 'default'}
+                          disabled={!canCustomModel || selectedConfigId === 'default'}
                           className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full disabled:opacity-60"
                           placeholder="https://api.openai.com/v1"
                         />
@@ -1702,7 +1843,7 @@ export default function DocumentExtractor() {
                           type="text"
                           value={llmConfig.model}
                           onChange={(e) => setLlmConfig({ ...llmConfig, model: e.target.value })}
-                          disabled={selectedConfigId === 'default'}
+                          disabled={!canCustomModel || selectedConfigId === 'default'}
                           className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full disabled:opacity-60"
                           placeholder="gpt-4o-mini"
                         />
@@ -1713,7 +1854,7 @@ export default function DocumentExtractor() {
                           type="password"
                           value={llmConfig.apiKey}
                           onChange={(e) => setLlmConfig({ ...llmConfig, apiKey: e.target.value })}
-                          disabled={selectedConfigId === 'default'}
+                          disabled={!canCustomModel || selectedConfigId === 'default'}
                           className="bg-warm-sand border border-border-warm rounded px-3 py-1.5 text-xs outline-none focus:bg-ivory focus:border-focus-blue focus:ring-1 focus:ring-focus-blue transition w-full disabled:opacity-60"
                           placeholder="••••••••••••••••••••"
                         />
@@ -1722,8 +1863,8 @@ export default function DocumentExtractor() {
 
                     <button
                       onClick={verifyLlmConnection}
-                      disabled={isTestingLlm}
-                      className="w-full bg-terracotta hover:bg-terracotta-hover text-ivory text-xs font-semibold py-2 rounded transition flex items-center justify-center gap-1.5"
+                      disabled={isTestingLlm || !canCustomModel}
+                      className="w-full bg-terracotta hover:bg-terracotta-hover text-ivory text-xs font-semibold py-2 rounded transition flex items-center justify-center gap-1.5 disabled:opacity-50"
                     >
                       {isTestingLlm && <Loader2 size={12} className="animate-spin" />}
                       {isTestingLlm ? '正在验证连接...' : '测试并保存配置'}
@@ -1944,18 +2085,26 @@ export default function DocumentExtractor() {
                         <h2 className="font-serif font-medium text-lg">步骤 2: 配置字段</h2>
                       </div>
 
-                      <button
-                        onClick={() => {
-                          if (confirm('是否还原到默认字段矩阵？这将丢失现有配置。')) {
-                            setFields(DEFAULT_FIELDS);
-                            setCustomPrompt(DEFAULT_SYSTEM_PROMPT);
-                          }
-                        }}
-                        className="text-xs font-semibold text-olive-gray hover:text-near-black bg-warm-sand/50 hover:bg-warm-sand px-3 py-1 rounded transition border border-border-warm"
-                      >
-                        重置为默认字段
-                      </button>
+                      {canCustomFields && (
+                        <button
+                          onClick={() => {
+                            if (confirm('是否还原到默认字段矩阵？这将丢失现有配置。')) {
+                              if (preset?.fields) setFields(preset.fields);
+                              if (preset?.systemPrompt) setCustomPrompt(preset.systemPrompt);
+                            }
+                          }}
+                          className="text-xs font-semibold text-olive-gray hover:text-near-black bg-warm-sand/50 hover:bg-warm-sand px-3 py-1 rounded transition border border-border-warm"
+                        >
+                          重置为默认字段
+                        </button>
+                      )}
                     </div>
+
+                    {!canCustomFields && (
+                      <div className="mb-4 p-2.5 bg-amber-50 border border-amber-200 rounded text-amber-800 text-xs flex items-center gap-1.5 font-semibold">
+                        🔒 拆解字段矩阵已由【{preset?.department || '部门预设'}】统一标准化锁定。
+                      </div>
+                    )}
 
                     <p className="text-xs text-olive-gray mb-6 leading-relaxed">
                       配置您想让大模型提取的字段，并与云端多维表格的目标列进行匹配映射。
@@ -1980,36 +2129,39 @@ export default function DocumentExtractor() {
 
                             return (
                               <tr key={index} className="hover:bg-ivory/40 transition">
-                                {/* Column 1: Label (10%) */}
+                                {/* Column 1: Label */}
                                 <td className="p-4 align-top">
                                   <input
                                     type="text"
                                     value={f.label}
                                     onChange={(e) => updateFieldCell(index, 'label', e.target.value)}
+                                    disabled={!canCustomFields}
                                     placeholder="例如: 问题描述"
-                                    className="bg-warm-sand/30 border border-border-warm rounded px-2.5 py-1.5 text-xs outline-none focus:bg-white focus:border-terracotta focus:ring-1 focus:ring-terracotta transition w-full font-semibold"
+                                    className="bg-warm-sand/30 border border-border-warm rounded px-2.5 py-1.5 text-xs outline-none focus:bg-white focus:border-terracotta focus:ring-1 focus:ring-terracotta transition w-full font-semibold disabled:opacity-60"
                                   />
                                 </td>
 
-                                {/* Column 2: Description (40%) */}
+                                {/* Column 2: Description */}
                                 <td className="p-4 align-top">
                                   <textarea
                                     value={f.desc}
                                     onChange={(e) => updateFieldCell(index, 'desc', e.target.value)}
+                                    disabled={!canCustomFields}
                                     placeholder="该字段的提取要求和约束描述"
                                     rows={2}
-                                    className="bg-warm-sand/30 border border-border-warm rounded px-2.5 py-1.5 text-xs outline-none focus:bg-white focus:border-terracotta focus:ring-1 focus:ring-terracotta transition w-full resize-none font-sans"
+                                    className="bg-warm-sand/30 border border-border-warm rounded px-2.5 py-1.5 text-xs outline-none focus:bg-white focus:border-terracotta focus:ring-1 focus:ring-terracotta transition w-full resize-none font-sans disabled:opacity-60"
                                   />
                                 </td>
 
-                                {/* Column 3: Example (35%) */}
+                                {/* Column 3: Example */}
                                 <td className="p-4 align-top">
                                   <textarea
                                     value={f.example}
                                     onChange={(e) => updateFieldCell(index, 'example', e.target.value)}
+                                    disabled={!canCustomFields}
                                     placeholder="该字段的规范样例值"
                                     rows={2}
-                                    className="bg-warm-sand/30 border border-border-warm rounded px-2.5 py-1.5 text-xs outline-none focus:bg-white focus:border-terracotta focus:ring-1 focus:ring-terracotta transition w-full resize-none font-sans"
+                                    className="bg-warm-sand/30 border border-border-warm rounded px-2.5 py-1.5 text-xs outline-none focus:bg-white focus:border-terracotta focus:ring-1 focus:ring-terracotta transition w-full resize-none font-sans disabled:opacity-60"
                                   />
                                 </td>
 
@@ -2065,12 +2217,16 @@ export default function DocumentExtractor() {
                                 </td>
 
                                 <td className="p-4 align-top text-center">
-                                  <button
-                                    onClick={() => removeFieldItem(index)}
-                                    className="p-1.5 text-stone-gray hover:text-error-crimson rounded transition"
-                                  >
-                                    <X size={14} />
-                                  </button>
+                                  {canCustomFields ? (
+                                    <button
+                                      onClick={() => removeFieldItem(index)}
+                                      className="p-1.5 text-stone-gray hover:text-error-crimson rounded transition"
+                                    >
+                                      <X size={14} />
+                                    </button>
+                                  ) : (
+                                    <span className="text-stone-gray text-[10px] flex justify-center pt-1" title="锁定不可删除">🔒</span>
+                                  )}
                                 </td>
                               </tr>
                             );
@@ -2079,13 +2235,15 @@ export default function DocumentExtractor() {
                       </table>
                     </div>
 
-                    <button
-                      onClick={addFieldItem}
-                      className="w-full border border-dashed border-stone-gray text-olive-gray hover:text-near-black hover:border-near-black py-2 rounded text-xs font-semibold flex items-center justify-center gap-1 transition"
-                    >
-                      <Plus size={12} />
-                      <span>新增自定义提取字段</span>
-                    </button>
+                    {canCustomFields && (
+                      <button
+                        onClick={addFieldItem}
+                        className="w-full border border-dashed border-stone-gray text-olive-gray hover:text-near-black hover:border-near-black py-2 rounded text-xs font-semibold flex items-center justify-center gap-1 transition"
+                      >
+                        <Plus size={12} />
+                        <span>新增自定义提取字段</span>
+                      </button>
+                    )}
                   </section>
                 </div>
 
@@ -2097,33 +2255,40 @@ export default function DocumentExtractor() {
                         <Sparkles size={16} className="text-terracotta" />
                         AI 提示词微调设置
                       </h3>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            if (confirm('是否将系统提示词恢复为默认值？')) {
-                              setCustomPrompt(DEFAULT_SYSTEM_PROMPT);
-                            }
-                          }}
-                          className="text-xs font-semibold text-olive-gray hover:text-near-black bg-warm-sand/50 hover:bg-warm-sand px-3 py-1 rounded transition border border-border-warm"
-                        >
-                          恢复默认
-                        </button>
-                        <button
-                          onClick={optimizePrompt}
-                          disabled={isOptimizingPrompt || !llmConnected}
-                          className="text-xs font-semibold text-terracotta hover:text-terracotta-hover border border-terracotta/30 bg-terracotta/[0.02] px-3 py-1 rounded transition flex items-center gap-1 disabled:opacity-40"
-                        >
-                          {isOptimizingPrompt ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
-                          <span>AI 优化</span>
-                        </button>
-                      </div>
+                      {canCustomPrompt ? (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              if (confirm('是否将系统提示词恢复为默认值？')) {
+                                if (preset?.systemPrompt) setCustomPrompt(preset.systemPrompt);
+                              }
+                            }}
+                            className="text-xs font-semibold text-olive-gray hover:text-near-black bg-warm-sand/50 hover:bg-warm-sand px-3 py-1 rounded transition border border-border-warm"
+                          >
+                            恢复默认
+                          </button>
+                          <button
+                            onClick={optimizePrompt}
+                            disabled={isOptimizingPrompt || !llmConnected}
+                            className="text-xs font-semibold text-terracotta hover:text-terracotta-hover border border-terracotta/30 bg-terracotta/[0.02] px-3 py-1 rounded transition flex items-center gap-1 disabled:opacity-40"
+                          >
+                            {isOptimizingPrompt ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
+                            <span>AI 优化</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full">
+                          🔒 提示词已由部门锁定
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex flex-col gap-3">
                       <textarea
                         value={customPrompt}
                         onChange={(e) => setCustomPrompt(e.target.value)}
-                        className="bg-warm-sand/30 border border-border-warm rounded-lg p-4 text-xs outline-none focus:bg-white focus:border-terracotta transition w-full min-h-[300px] font-sans"
+                        disabled={!canCustomPrompt}
+                        className="bg-warm-sand/30 border border-border-warm rounded-lg p-4 text-xs outline-none focus:bg-white focus:border-terracotta transition w-full min-h-[300px] font-sans disabled:opacity-60"
                         placeholder="请输入大模型解析提示词..."
                       />
                       <span className="text-xs text-stone-gray leading-normal">
@@ -2316,6 +2481,43 @@ export default function DocumentExtractor() {
                       </div>
                     )}
 
+                    {/* Action Toolbar above table header */}
+                    <div className="flex justify-between items-center gap-4 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {extractedIssues.length > 0 && (
+                          <span className="text-xs bg-warm-sand/80 text-olive-gray font-semibold px-3 py-1.5 rounded border border-border-cream mr-1">
+                            共 {extractedIssues.length} 条记录
+                          </span>
+                        )}
+                        <button
+                          onClick={addIssueRow}
+                          className="border border-stone-gray hover:border-near-black text-olive-gray hover:text-near-black px-3.5 py-1.5 rounded text-xs font-semibold flex items-center gap-1 transition bg-white shadow-xs"
+                        >
+                          <Plus size={12} />
+                          <span>添加空白行记录</span>
+                        </button>
+
+                        {extractedIssues.length > 0 && (
+                          <button
+                            onClick={exportToExcel}
+                            className="border border-stone-gray hover:border-near-black text-olive-gray hover:text-near-black px-3.5 py-1.5 rounded text-xs font-semibold flex items-center gap-1 transition bg-white shadow-xs"
+                          >
+                            <Download size={12} />
+                            <span>导出为 Excel</span>
+                          </button>
+                        )}
+
+                        {rawLlmResponse && (
+                          <button
+                            onClick={() => setIsLlmModalOpen(true)}
+                            className="border border-stone-gray hover:border-near-black text-olive-gray hover:text-near-black px-3.5 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition bg-white shadow-xs"
+                          >
+                            <span>🤖 查看 LLM 原始输出</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
                     {/* Results grid */}
                     <div className="border border-border-cream rounded-lg bg-white shadow-sm overflow-visible">
                       <div className="overflow-visible">
@@ -2376,43 +2578,6 @@ export default function DocumentExtractor() {
                             ))}
                           </tbody>
                         </table>
-                      </div>
-                    </div>
-
-                    {/* Action buttons */}
-                    <div className="flex justify-between items-center gap-4">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {extractedIssues.length > 0 && (
-                          <span className="text-xs bg-warm-sand/80 text-olive-gray font-semibold px-3 py-2 rounded border border-border-cream mr-1">
-                            共 {extractedIssues.length} 条记录
-                          </span>
-                        )}
-                        <button
-                          onClick={addIssueRow}
-                          className="border border-stone-gray hover:border-near-black text-olive-gray hover:text-near-black px-4 py-2 rounded text-xs font-semibold flex items-center gap-1 transition bg-white shadow-sm"
-                        >
-                          <Plus size={12} />
-                          <span>添加空白行记录</span>
-                        </button>
-
-                        {extractedIssues.length > 0 && (
-                          <button
-                            onClick={exportToExcel}
-                            className="border border-stone-gray hover:border-near-black text-olive-gray hover:text-near-black px-4 py-2 rounded text-xs font-semibold flex items-center gap-1 transition bg-white shadow-sm"
-                          >
-                            <Download size={12} />
-                            <span>导出为 Excel</span>
-                          </button>
-                        )}
-
-                        {rawLlmResponse && (
-                          <button
-                            onClick={() => setIsLlmModalOpen(true)}
-                            className="border border-stone-gray hover:border-near-black text-olive-gray hover:text-near-black px-4 py-2 rounded text-xs font-semibold flex items-center gap-1.5 transition bg-white shadow-sm"
-                          >
-                            <span>🤖 查看 LLM 原始输出</span>
-                          </button>
-                        )}
                       </div>
                     </div>
 
@@ -2478,21 +2643,41 @@ export default function DocumentExtractor() {
           </div>
 
           {/* Right Side Buttons */}
-          <div className="flex justify-end">
+          <div className="flex justify-end items-center gap-3">
             {activeStep === 1 && (
-              <button
-                onClick={() => {
-                  if (filesQueue.length === 0) {
-                    showToast('请先上传或选择待解析文档！');
-                    return;
-                  }
-                  setActiveStep(2);
-                }}
-                className="bg-terracotta hover:bg-terracotta-hover text-ivory text-xs font-semibold px-8 py-2.5 rounded transition flex items-center gap-1.5 shadow-sm hover:animate-none"
-              >
-                <span>下一步：配置字段</span>
-                <ArrowRight size={14} />
-              </button>
+              <>
+                <button
+                  onClick={() => {
+                    const ready = filesQueue.filter(f => f.status === 'done');
+                    if (ready.length === 0) {
+                      showToast('请先选择待解析的已就绪文档！');
+                      return;
+                    }
+                    setActiveStep(3);
+                    startExtraction();
+                  }}
+                  disabled={filesQueue.filter(f => f.status === 'done').length === 0}
+                  className="px-4 py-2.5 rounded text-xs font-semibold border border-terracotta/40 bg-terracotta/10 text-terracotta hover:bg-terracotta/20 transition flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
+                  title="直接跳过第 2 步字段配置，以当前设定的字段列表开始大模型提取"
+                >
+                  <Sparkles size={14} />
+                  <span>跳过预览字段，立即解析</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (filesQueue.length === 0) {
+                      showToast('请先上传或选择待解析文档！');
+                      return;
+                    }
+                    setActiveStep(2);
+                  }}
+                  className="bg-terracotta hover:bg-terracotta-hover text-ivory text-xs font-semibold px-8 py-2.5 rounded transition flex items-center gap-1.5 shadow-sm hover:animate-none"
+                >
+                  <span>下一步：配置字段</span>
+                  <ArrowRight size={14} />
+                </button>
+              </>
             )}
 
             {activeStep === 2 && (

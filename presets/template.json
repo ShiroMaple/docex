@@ -1,0 +1,49 @@
+{
+  "_comment": "DocEx 部门预设物理配置文件模版与说明文档 (template.json)",
+  "_readme": "此文件用于指导运维/开发人员创建或扩展新的预设。建立新预设时，只需在 presets/ 目录下复制本文件并重命名为 [id].json (例如 qa.json)，并填充对应配置即可。系统会自动加载该预设。",
+
+  "id": "预设标识符 (必填)。作用：决定路由访问路径。例如填写 'qa' 则对应访问路径为 /preset/qa；填写 'hse' 则对应 /preset/hse",
+  "name": "预设完整名称 (必填)。作用：显示在网页 HTML 标题、浏览器 Tab 页名称以及页面主标题处",
+  "department": "所属部门名称 (必填)。作用：显示在顶部 Header 标题下拉切换菜单的大标题中，例如 '安全环保部'、'质量管理部'",
+  "subtitle": "预设副标题/描述 (选填)。作用：显示在顶部 Header 切换菜单选项的第二行小字提示中",
+  "badgeText": "专属徽标文案 (选填)。作用：显示在专属页面顶部 Header 胶囊按钮中的文案，例如 '🛡️ 安全环保部专用版'",
+
+  "locked": "全局锁定开关 (布尔值 true / false)。作用：简易总开关，当未指定细粒度权限时，true 代表全部锁定",
+
+  "allowCustomModel": "允许配置自定义模型 (布尔值 true / false，默认 false)。作用：若为 false，将禁用/锁定顶栏大模型 API Key、BaseUrl、Model 的修改入口",
+  "allowCustomPlatform": "允许配置自定义文档平台 (布尔值 true / false，默认 false)。作用：若为 false，将禁用/锁定顶栏 WPS / 飞书链接及凭证的修改入口",
+  "allowCustomFields": "允许配置拆解字段 (布尔值 true / false，默认 false)。作用：若为 false，将禁用第 2 步中拆解字段矩阵的增删与编辑",
+  "allowCustomPrompt": "允许配置模型提示词 (布尔值 true / false，默认 false)。作用：若为 false，将禁用第 2 步中 System Prompt / User Prompt 的编辑与 AI 优化提示词按钮",
+
+  "systemPrompt": "大模型系统提示词 (System Prompt)。作用：传给 OpenAI/大模型的核心指令，指导模型如何理解文档、按什么规则区分隐患条目、如何处理日期格式等",
+  "userPrompt": "大模型用户提示词前缀 (User Prompt)。作用：在把预处理文档内容提交给大模型时放在正文前的引导说明",
+
+  "fields": [
+    {
+      "_field_explain": "--- 提取字段对象数组，定义要从文档中抽取哪些数据项 ---",
+      "key": "字段英文 Key (必填，英文字母)。作用：大模型返回 JSON 中的属性名，以及代码内部传递的主键，如 'projectName'",
+      "label": "字段中文名称 (必填)。作用：显示在第 2 步字段配置表头、第 3 步解析结果预览表格的列名，以及 Excel 导出表头",
+      "desc": "字段提取说明 (必填)。作用：告知大模型该字段的具体定义，例如 '发现问题的具体位置、点位'",
+      "example": "字段示例 (选填)。作用：给大模型的参考示例，提高特定格式字段提取的准确率",
+      "isAdvancedOpen": false
+    }
+  ],
+
+  "fieldMapping": {
+    "_mapping_explain": "--- 字段与云端多维表格 (WPS / 飞书) 的列名映射矩阵 ---",
+    "云端多维表格列名 1": "对应上面定义的字段英文 key (例如 'projectName')",
+    "云端多维表格列名 2": "对应上面定义的字段英文 key (例如 'description')"
+  },
+
+  "_env_overrides_documentation": {
+    "说明": "在 .env 文件中可使用大写 [ID]_ 前缀独立覆盖本预设在生产环境中的秘钥与云端表格凭证。若 .env 中未配置，系统会自动平滑继承通用的基础配置。",
+    "示例环境变量": [
+      "HSE_OPENAI_API_KEY=sk-xxxxxx (独立覆盖安全环保部的大模型 ApiKey)",
+      "HSE_OPENAI_MODEL=mimo-v2.5 (独立覆盖使用的模型)",
+      "HSE_LARK_APP_TOKEN=bascnXXXXXX (独立绑定安全环保部的飞书多维表格 AppToken)",
+      "HSE_LARK_TABLE_ID=tblXXXXXX (独立绑定安全环保部的飞书数据表 TableID)",
+      "HSE_LARK_APP_ID=cli_XXXXXX (自定飞书应用凭证 AppID)",
+      "HSE_LARK_APP_SECRET=XXXXXX (自定飞书应用凭证 AppSecret)"
+    ]
+  }
+}

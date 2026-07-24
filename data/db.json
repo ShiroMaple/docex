@@ -3,7 +3,7 @@
     {
       "md5": "ff3e3d8e81453144312017878cb75a78",
       "fileName": "测试文件.pdf",
-      "uploadTime": "2026-07-13T08:24:44.207Z",
+      "uploadTime": "2026-07-24T03:08:09.835Z",
       "status": "done",
       "progress": 100,
       "originalPath": "C:\\Users\\gaoft\\Documents\\CodeSpace\\docex\\data\\uploads\\ff3e3d8e81453144312017878cb75a78.pdf",
@@ -27,135 +27,6 @@
           "mimeType": "image/png"
         }
       ]
-    },
-    {
-      "md5": "8040998ee4ad8c0d90e1edf8f7c75cb1",
-      "fileName": "2026-06-22检查问题1.docx",
-      "uploadTime": "2026-07-13T08:24:48.440Z",
-      "status": "done",
-      "progress": 100,
-      "originalPath": "C:\\Users\\gaoft\\Documents\\CodeSpace\\docex\\data\\uploads\\8040998ee4ad8c0d90e1edf8f7c75cb1.docx",
-      "error": null,
-      "textPath": "data/preprocessed/8040998ee4ad8c0d90e1edf8f7c75cb1/text.txt",
-      "structurePath": "data/preprocessed/8040998ee4ad8c0d90e1edf8f7c75cb1/structure.json"
-    },
-    {
-      "md5": "a0d6059a275d4b587a9f3cb00d5ca8bb",
-      "fileName": "镇海基地第三方HSE监管日报（6月22日）.pdf",
-      "uploadTime": "2026-07-13T15:10:35.790Z",
-      "status": "done",
-      "progress": 100,
-      "originalPath": "C:\\Users\\gaoft\\Documents\\CodeSpace\\docex\\data\\uploads\\a0d6059a275d4b587a9f3cb00d5ca8bb.pdf",
-      "error": null,
-      "textPath": "data/preprocessed/a0d6059a275d4b587a9f3cb00d5ca8bb/text.txt",
-      "images": [
-        {
-          "path": "data/preprocessed/a0d6059a275d4b587a9f3cb00d5ca8bb/page-1.png",
-          "mimeType": "image/png"
-        },
-        {
-          "path": "data/preprocessed/a0d6059a275d4b587a9f3cb00d5ca8bb/page-2.png",
-          "mimeType": "image/png"
-        },
-        {
-          "path": "data/preprocessed/a0d6059a275d4b587a9f3cb00d5ca8bb/page-3.png",
-          "mimeType": "image/png"
-        },
-        {
-          "path": "data/preprocessed/a0d6059a275d4b587a9f3cb00d5ca8bb/page-4.png",
-          "mimeType": "image/png"
-        },
-        {
-          "path": "data/preprocessed/a0d6059a275d4b587a9f3cb00d5ca8bb/page-5.png",
-          "mimeType": "image/png"
-        },
-        {
-          "path": "data/preprocessed/a0d6059a275d4b587a9f3cb00d5ca8bb/page-6.png",
-          "mimeType": "image/png"
-        },
-        {
-          "path": "data/preprocessed/a0d6059a275d4b587a9f3cb00d5ca8bb/page-7.png",
-          "mimeType": "image/png"
-        },
-        {
-          "path": "data/preprocessed/a0d6059a275d4b587a9f3cb00d5ca8bb/page-8.png",
-          "mimeType": "image/png"
-        },
-        {
-          "path": "data/preprocessed/a0d6059a275d4b587a9f3cb00d5ca8bb/page-9.png",
-          "mimeType": "image/png"
-        },
-        {
-          "path": "data/preprocessed/a0d6059a275d4b587a9f3cb00d5ca8bb/page-10.png",
-          "mimeType": "image/png"
-        },
-        {
-          "path": "data/preprocessed/a0d6059a275d4b587a9f3cb00d5ca8bb/page-11.png",
-          "mimeType": "image/png"
-        },
-        {
-          "path": "data/preprocessed/a0d6059a275d4b587a9f3cb00d5ca8bb/page-12.png",
-          "mimeType": "image/png"
-        },
-        {
-          "path": "data/preprocessed/a0d6059a275d4b587a9f3cb00d5ca8bb/page-13.png",
-          "mimeType": "image/png"
-        },
-        {
-          "path": "data/preprocessed/a0d6059a275d4b587a9f3cb00d5ca8bb/page-14.png",
-          "mimeType": "image/png"
-        },
-        {
-          "path": "data/preprocessed/a0d6059a275d4b587a9f3cb00d5ca8bb/page-15.png",
-          "mimeType": "image/png"
-        },
-        {
-          "path": "data/preprocessed/a0d6059a275d4b587a9f3cb00d5ca8bb/page-16.png",
-          "mimeType": "image/png"
-        },
-        {
-          "path": "data/preprocessed/a0d6059a275d4b587a9f3cb00d5ca8bb/page-17.png",
-          "mimeType": "image/png"
-        }
-      ]
-    },
-    {
-      "md5": "fdfad952a88670a58690982003b2362a",
-      "fileName": "2026-06-22检查问题3.docx",
-      "uploadTime": "2026-07-13T15:13:25.882Z",
-      "status": "done",
-      "progress": 100,
-      "originalPath": "C:\\Users\\gaoft\\Documents\\CodeSpace\\docex\\data\\uploads\\fdfad952a88670a58690982003b2362a.docx",
-      "error": null,
-      "textPath": "data/preprocessed/fdfad952a88670a58690982003b2362a/text.txt",
-      "structurePath": "data/preprocessed/fdfad952a88670a58690982003b2362a/structure.json"
-    },
-    {
-      "md5": "335e3aef9e45042ec2da25cc406656b3",
-      "fileName": "Image_20260610_0003.pdf",
-      "uploadTime": "2026-07-13T15:13:40.113Z",
-      "status": "done",
-      "progress": 100,
-      "originalPath": "C:\\Users\\gaoft\\Documents\\CodeSpace\\docex\\data\\uploads\\335e3aef9e45042ec2da25cc406656b3.pdf",
-      "error": null,
-      "textPath": "data/preprocessed/335e3aef9e45042ec2da25cc406656b3/text.txt",
-      "images": [
-        {
-          "path": "data/preprocessed/335e3aef9e45042ec2da25cc406656b3/page-1.png",
-          "mimeType": "image/png"
-        }
-      ]
-    },
-    {
-      "md5": "ba484dd8b492518909e9087129db8b20",
-      "fileName": "2026-06-22检查问题2.docx",
-      "uploadTime": "2026-07-14T00:21:15.212Z",
-      "status": "done",
-      "progress": 100,
-      "originalPath": "C:\\Users\\gaoft\\Documents\\CodeSpace\\docex\\data\\uploads\\ba484dd8b492518909e9087129db8b20.docx",
-      "error": null,
-      "textPath": "data/preprocessed/ba484dd8b492518909e9087129db8b20/text.txt",
-      "structurePath": "data/preprocessed/ba484dd8b492518909e9087129db8b20/structure.json"
     }
   ]
 }

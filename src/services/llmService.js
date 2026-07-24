@@ -298,19 +298,16 @@ function translateResultKeys(results, fields) {
 /**
  * 极简兼容方法：适配旧版安全报告调用
  */
-export async function extractSafetyIssues(multimodalData) {
-  const defaultFields = [
-    { key: 'projectName', label: '项目名称', desc: '隐患对应的项目或工程名称', example: '' },
-    { key: 'issueType', label: '问题类型', desc: '安全问题分类，如临时用电、高处作业', example: '' },
-    { key: 'inspectionArea', label: '检查区域', desc: '问题被发现的具体位置', example: '' },
-    { key: 'description', label: '问题描述', desc: '安全隐患的现状具体描述', example: '' },
-    { key: 'rectificationRequirement', label: '整改要求', desc: '整改措施或限期完成的要求', example: '' },
-    { key: 'inspector', label: '检查人员', desc: '检查人员姓名', example: '' },
-    { key: 'inspectionDate', label: '检查日期', desc: '发现隐患的日期 (YYYY-MM-DD)', example: '' }
-  ];
+import { getResolvedPreset } from '../config/presets.js';
 
-  const systemPrompt = `你是一个专业的安全检查报告解析专家。请严格按照提供的结构输出所有的安全隐患。`;
-  const userPrompt = `请提取安全隐患：`;
+/**
+ * 提取隐患辅助函数 (按默认 Preset 物理配置执行)
+ */
+export async function extractSafetyIssues(multimodalData) {
+  const defaultPreset = getResolvedPreset('default');
+  const defaultFields = defaultPreset?.fields || [];
+  const systemPrompt = defaultPreset?.systemPrompt || '你是一个专业的文档解析专家。';
+  const userPrompt = defaultPreset?.userPrompt || '请分析以下文档内容并提取结构化字段列表：';
 
   return await extractCustomFields(multimodalData, {
     systemPrompt,

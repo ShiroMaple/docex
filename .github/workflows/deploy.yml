@@ -51,6 +51,7 @@ jobs:
       - name: Package Artifacts
         run: |
           [ -d public ] && cp -r public .next/standalone/public || echo "No public folder found"
+          [ -d presets ] && cp -r presets .next/standalone/presets || echo "No presets folder found"
           cp -r .next/static .next/standalone/.next/static
           cp ecosystem.config.cjs .next/standalone/ecosystem.config.cjs
           cd .next/standalone
