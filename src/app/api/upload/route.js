@@ -31,8 +31,8 @@ async function uploadHandler(request) {
     const fileName = file.name;
     const ext = path.extname(fileName).toLowerCase();
 
-    if (!['.pdf', '.docx'].includes(ext)) {
-      return NextResponse.json({ error: '仅支持 PDF 和 DOCX 格式' }, { status: 400 });
+    if (!['.pdf', '.docx', '.jpg', '.jpeg', '.png'].includes(ext)) {
+      return NextResponse.json({ error: '仅支持 PDF、DOCX 及图片 (JPG/JPEG/PNG) 格式' }, { status: 400 });
     }
 
     const arrayBuffer = await file.arrayBuffer();
@@ -52,6 +52,8 @@ async function uploadHandler(request) {
           await fs.access(path.join(targetDir, 'text.txt'));
         } else if (ext === '.docx') {
           await fs.access(path.join(targetDir, 'structure.json'));
+        } else if (['.jpg', '.jpeg', '.png'].includes(ext)) {
+          await fs.access(path.join(targetDir, `image${ext}`));
         }
         physicalExists = true;
       } catch {

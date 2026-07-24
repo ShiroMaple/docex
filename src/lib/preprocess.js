@@ -70,6 +70,8 @@ async function preprocessFile(md5) {
       await processPdf(filePath, outputDir, md5);
     } else if (ext === '.docx') {
       await processDocx(filePath, outputDir, md5);
+    } else if (['.jpg', '.jpeg', '.png'].includes(ext)) {
+      await processImage(filePath, outputDir, md5, ext);
     } else {
       throw new Error(`不支持的文件格式: ${ext}`);
     }
@@ -236,3 +238,35 @@ async function processDocx(filePath, outputDir, md5) {
     structurePath: `data/preprocessed/${md5}/structure.json`
   });
 }
+
+/**
+ * 图片 (.jpg, .jpeg, .png) 预处理
+ */
+async function processImage(filePath, outputDir, md5, ext) {
+  await saveFileRecord({ md5, progress: 30 });
+
+  const mimeType = ext === '.png' ? 'image/png' : 'image/jpeg';
+  const imgName = `image${ext}`;
+  const targetImgPath = path.join(outputDir, imgName);
+
+  // 复制原图到预处理产物目录
+  await fs.copyFile(filePath, targetImgPath);
+
+  // 写入文本参考层
+  const textFilePath = path.join(outputDir, 'text.txt');
+  await fs.writeFile(textFilePath, `[图片文件: ${md5}${ext}]`, 'utf-8');
+
+  const images = [{
+    path: `data/preprocessed/${md5}/${imgName}`,
+    mimeType
+  }];
+
+  await saveFileRecord({
+    md5,
+    status: 'done',
+    progress: 100,
+    textPath: `data/preprocessed/${md5}/text.txt`,
+    images
+  });
+}
+

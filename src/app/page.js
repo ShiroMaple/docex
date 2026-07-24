@@ -36,6 +36,12 @@ const WordIcon = ({ className = "w-6 h-6" }) => (
   <img src="/icons/word.svg" alt="Word" className={className} />
 );
 
+const ImageIcon = ({ className = "w-6 h-6" }) => (
+  <span className={`inline-flex items-center justify-center rounded bg-sky-100 text-sky-700 font-bold text-[9px] select-none ${className}`}>
+    IMG
+  </span>
+);
+
 export default function DocumentExtractor({ presetId = null }) {
   // ── Preset State ──
   const [preset, setPreset] = useState(null);
@@ -745,7 +751,7 @@ export default function DocumentExtractor({ presetId = null }) {
   };
 
   const handleFilesUpload = async (fileList) => {
-    const allowedExtensions = ['pdf', 'docx'];
+    const allowedExtensions = ['pdf', 'docx', 'jpg', 'jpeg', 'png'];
 
     for (let i = 0; i < fileList.length; i++) {
       const file = fileList[i];
@@ -1459,7 +1465,7 @@ export default function DocumentExtractor({ presetId = null }) {
         <div className="max-w-[1440px] mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <a href="/" className="flex items-center gap-2 hover:opacity-90 transition">
-              <img src="/icons/logo_maple.jpg" alt="Logo" className="w-6 h-6 object-cover rounded-md" />
+              <img src="/icons/logo_docex.png" alt="Logo" className="w-6 h-6 object-cover rounded-md" />
               <span className="font-serif font-bold text-lg leading-none tracking-tight">DocEx</span>
             </a>
 
@@ -1928,7 +1934,7 @@ export default function DocumentExtractor({ presetId = null }) {
                         拖拽文件到此处，或点击卡片选取，支持同时上传多个文档
                       </p>
                       <p className="text-xs text-stone-gray mt-1 text-center">
-                        支持 PDF / DOCX 格式，最高支持容量 50MB
+                        支持 PDF / Word (.docx) / 图片 (.jpg, .jpeg, .png) 格式，最高支持容量 50MB
                       </p>
                     </div>
                   </div>
@@ -1962,8 +1968,10 @@ export default function DocumentExtractor({ presetId = null }) {
                             {/* File Icon */}
                             {item.fileName.toLowerCase().endsWith('.pdf') ? (
                               <PdfIcon className="w-5 h-5 mb-1 flex-shrink-0" />
-                            ) : (
+                            ) : item.fileName.toLowerCase().endsWith('.docx') ? (
                               <WordIcon className="w-5 h-5 mb-1 flex-shrink-0" />
+                            ) : (
+                              <ImageIcon className="w-5 h-5 mb-1 flex-shrink-0" />
                             )}
 
                             {/* File Name (line-clamp-2 allows 2-line wrap) */}
@@ -2022,7 +2030,7 @@ export default function DocumentExtractor({ presetId = null }) {
                   ref={fileInputRef}
                   className="hidden"
                   multiple
-                  accept=".pdf,.docx"
+                  accept=".pdf,.docx,.jpg,.jpeg,.png"
                   onChange={(e) => handleFilesUpload(e.target.files)}
                 />
                 {historyFiles.length > 0 && (
@@ -2041,8 +2049,10 @@ export default function DocumentExtractor({ presetId = null }) {
                           <div className="flex items-center gap-2 min-w-0">
                             {file.fileName.toLowerCase().endsWith('.pdf') ? (
                               <PdfIcon className="w-5 h-5 flex-shrink-0" />
-                            ) : (
+                            ) : file.fileName.toLowerCase().endsWith('.docx') ? (
                               <WordIcon className="w-5 h-5 flex-shrink-0" />
+                            ) : (
+                              <ImageIcon className="w-5 h-5 flex-shrink-0" />
                             )}
                             <span className="text-xs font-semibold text-near-black truncate" title={file.fileName}>{file.fileName}</span>
                           </div>

@@ -159,6 +159,21 @@ async function extractHandler(request) {
           }
         }
         multimodalData = parts;
+      } else if (['.jpg', '.jpeg', '.png'].includes(ext)) {
+        // 读取图片文件转化为 Base64 二进制流
+        const imgName = `image${ext}`;
+        const imgFullPath = path.join(outputDir, imgName);
+
+        const imgBuffer = await fs.readFile(imgFullPath);
+        const mimeType = ext === '.png' ? 'image/png' : 'image/jpeg';
+
+        multimodalData = {
+          text: `[图片文件: ${record.fileName}]`,
+          images: [{
+            data: imgBuffer.toString('base64'),
+            mimeType
+          }]
+        };
       }
     } catch (fsErr) {
       logger.error({
